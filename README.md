@@ -1,6 +1,7 @@
-
-# <center>SSB64 Model Appender
-<center>Converts binary model pointers from RAM usage to ROM usage, and/or can append it to another file while updating pointers. <br>
+<div align="center">
+    
+# SSB64 Model Appender
+Converts binary model pointers from RAM usage to ROM usage, and/or can append it to another file while updating pointers. <br>
 
 (Especially great if you use [Model2F3DEX-SSB](http://n64vault.com/ssb-tools:model2f3dex-ssb))
 
@@ -38,3 +39,4 @@ This was used to help create [San Antonio Remix v2.0.0](https://github.com/OhTho
 
 ## License
 Copyright (C) 2025 Thomas Rader
+</div>
