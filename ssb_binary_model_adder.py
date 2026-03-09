@@ -9,25 +9,12 @@ import os
 import subprocess
 import argparse
 import binascii
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-file","--file",required=True,type=str,help="File we're expanding (pointers here need to be connected).")
-parser.add_argument("-file_to_add","--file_to_add",default="",type=str,help="File to add.")
-parser.add_argument("-offset","--offset","-location","--location",default="-1",type=str,help="Hexadecimal location of where we're adding the file in the binary (as a string, ex: '0xA4').")
-parser.add_argument("-add","--add",default="",type=str,help="Adds certain amount from pointers that point past given offset. (as a string, ex: '0x8A')")
-parser.add_argument("-subtract","--subtract",default="",type=str,help="Subtracts certain amount from pointers that point past given offset. (as a string, ex: '0x8A')")
-parser.add_argument("-first_pointer","--first_pointer","-internal_file_table_offset","--internal_file_table_offset",default="-1",type=str,help="First pointer to start checking (usually following the first FD command) (as a string, ex: '0xA4').")
-parser.add_argument("-first_pointer_file_to_add","--first_pointer_file_to_add","-internal_file_table_offset_fta","--internal_file_table_offset_fta",default="-1",type=str,help="First pointer in the file we're adding, if -2 then we don't change any pointers (usually following the first FD command) (as a string, ex: '0xA4').")
-parser.add_argument("-no_convert","--no_convert",action="store_true",help="Prevents converting the binary file_to_add from a single pointer to a 2 pointer command.")
-parser.add_argument("-debug","--debug",action="store_true",help="Prints debugging messages to output.")
-parser.add_argument("-python","--python","-python_version","--python_version",default="python3",type=str,help="Python version or location to run python commands with.")
-parser.add_argument("-overwrite","--overwrite","-force","--force",action="store_true",help="Forces overwrite, making output go to -file.")
-parser.add_argument("-o","--o","-output","--output",default="output.bin",type=str,help="Output file.")
-
-args = parser.parse_args()
+import re
+from ssb_binary_model_adder_arguments import args
 
 file_path = args.file
 file_to_add_path = args.file_to_add
+folder_to_add_path = args.folder_to_add
 add = args.add
 subtract = args.subtract
 hex_location = args.offset
@@ -35,6 +22,7 @@ first_pointer = args.first_pointer
 first_pointer_fta = args.first_pointer_file_to_add
 convert = not args.no_convert
 debug = args.debug
+palette_costume = args.palette_costume
 python_version = args.python
 overwrite = args.overwrite
 output_path = args.o
@@ -42,11 +30,47 @@ num_bytes = 4
 offset_to_add = 0
 pointers_overwritten = 0
 
+# Regex expressions
+texture_regex = re.compile(r'FD[2-9,A-F][0-8]0000')
+palette_regex = re.compile(r'FD[1][0-8]0000')
+primitive_regex = re.compile(r'FA000000')
+costume_regex = re.compile(r'DE0000000E[0-9]{6}')
+
+if folder_to_add_path != "":
+    # Get the current working directory
+    current_directory = os.getcwd()
+
+    # Define the arguments to pass to the script
+    python_convert_path = os.path.join(current_directory, "ssb_binary_model_adder_folder.py")
+    arguments = ["-file", file_path, "-file_to_add", file_to_add_path, "-folder_to_add", folder_to_add_path, "-add", add, "-subtract", subtract, "-offset", hex_location, "-first_pointer", first_pointer, "-first_pointer_file_to_add", first_pointer_fta, "-palette_costume", args.palette_costume, "-python", python_version, "-output", output_path]
+    if debug:
+        arguments.append("-debug")
+    if not convert:
+        arguments.append("-no_convert")
+    # if args.palette_costume:
+    #     arguments.append("-palette_costume")
+    if overwrite:
+        arguments.append("-overwrite")
+    # command = [python_version, python_convert_path]
+    command = [python_version, python_convert_path] + arguments
+    # Converting file_to_add
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    # Printing output
+    print(f"~Output {os.path.basename(file_to_add_path)}~\n")
+    print(f"{result.stdout}")
+
+    exit(0)
+
+
 if file_to_add_path == "" and subtract == "" and add == "":
     print(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract, subtract = '{subtract}', nothing to do, exiting.")
     exit(1)
 if add != "" and subtract != "":
     print(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
+    exit(1)
+if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
+    print(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
     exit(1)
 
 # Duplicating file
@@ -256,13 +280,13 @@ def find_first_pointer(file_path=file_path):
 
         # Determining if indexes
         # FD5 = texture
-        if (str(data[:3]).upper() == "FD5") or (str(data[:3]).upper() == "FD9"):
+        if (texture_regex.match(str(data[:8]).upper())):
             return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
         # FD1 = palette
-        elif str(data[:3]).upper() == "FD1":
+        elif (palette_regex.match(str(data[:8]).upper())):
             return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
         # FA = primitive coloring
-        elif str(data[:8]).upper() == "FA000000":
+        elif (primitive_regex.match(str(data[:8]).upper())):
 
             # Looking for next 01 command to determine first pointer
             while 1:
@@ -351,20 +375,20 @@ def get_base_offset_ROM(file_path=file_path):
         
         # Determining indexes
         # FD5 = texture
-        if (str(data[:3]).upper() == "FD5") or (str(data[:3]).upper() == "FD9"):
+        if (texture_regex.match(str(data[:8]).upper())):
             location_offset = int(data[12:16],16)
             # print(f"location offset is {location_offset} hex is {data[12:16]}")
             if location_offset < base_offset_dec:
                 base_offset_dec = location_offset
                 base_offset = data[12:16]
         # FD1 = palette
-        elif str(data[:3]).upper() == "FD1":
+        elif (palette_regex.match(str(data[:8]).upper())):
             location_offset = int(data[12:16],16)
             if location_offset < base_offset_dec:
                 base_offset_dec = location_offset
                 base_offset = data[12:16]
         # FA = primitive coloring
-        elif str(data[:8]).upper() == "FA000000":
+        elif (primitive_regex.match(str(data[:8]).upper())):
             while 1:
                 reading_loc_dec = int(reading_loc_hex,16)
 
@@ -539,9 +563,11 @@ if file_to_add_path != "":
         if convert:
             # Define the arguments to pass to the script
             python_convert_path = os.path.join(current_directory, "ssb_binary_model_converter.py")
-            arguments = ["-file", file_to_add_path, "-output", file_to_add_path_temp, "-offset", hex_location]
+            arguments = ["-file", file_to_add_path, "-output", file_to_add_path_temp, "-offset", hex_location, "-palette_costume", args.palette_costume]
             if debug:
                 arguments.append("-debug")
+            # if args.palette_costume:
+            #     arguments.append("-palette_costume")
             command = [python_version, python_convert_path] + arguments
 
             # Converting file_to_add

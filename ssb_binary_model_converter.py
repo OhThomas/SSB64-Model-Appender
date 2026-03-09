@@ -7,6 +7,7 @@ import shutil
 import os
 import argparse
 import binascii
+import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-file", "--file",required=True,type=str,help="File we're converting.")
@@ -16,6 +17,7 @@ parser.add_argument("-pi","--pi","-palette_index", "--palette_index",default="0x
 parser.add_argument("-ti","--ti","-texture_index", "--texture_index",default="0x0",type=str,help="Location where textures start in file (as a string, ex: '0x14').")
 parser.add_argument("-vi","--vi","-vertice_index", "--vertice_index",default="0x0",type=str,help="Location where vertices start in file (as a string, ex: '0x14').")
 parser.add_argument("-oi","--oi","-opcode_index", "--opcode_index",default="0x0",type=str,help="Location where opcodes start in file (as a string, ex: '0x14').")
+parser.add_argument("-palette_costume","--palette_costume","-costume","--costume",default="",help="Changes FD1 (palette) command with DE000000 0EXXXXXX to make palette based on costume palette. Enter entire DE command, ex DE0000000E000000.")
 parser.add_argument("-debug","--debug",action="store_true",help="Prints debugging messages to output.")
 parser.add_argument("-overwrite","--overwrite","-force","--force",action="store_true",help="Forces overwrite, making output go to -file.")
 parser.add_argument("-o","--o","-output","--output",default="output.bin",type=str,help="Output file.")
@@ -29,6 +31,7 @@ palette_index = args.pi
 texture_index = args.ti
 vertice_index = args.vi
 opcode_index = args.oi
+palette_costume = args.palette_costume
 debug = args.debug
 overwrite = args.overwrite
 output_path = args.o
@@ -36,6 +39,13 @@ num_bytes = 4
 pointers_overwritten = 0
 hex_content = ""
 current_location = "0x0"
+
+# Regex expressions
+texture_regex = re.compile(r'FD[2-9,A-F][0-8]0000')
+palette_regex = re.compile(r'FD[1][0-8]0000')
+primitive_regex = re.compile(r'FA000000')
+primitive_sync_regex = re.compile(r'E8000000')
+costume_regex = re.compile(r'DE0000000E[0-9]{6}')
 
 # Duplicating file
 try:
@@ -68,6 +78,11 @@ except FileNotFoundError:
     exit(1)
 except Exception as e:
     print(f"An error occurred: {e}")
+    exit(1)
+
+# Checking palette_costume argument
+if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
+    print(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
     exit(1)
 
 # Reads hexadecimal data from a file with hex offset given
@@ -184,9 +199,20 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
             current_location_dec = int(current_location,16)
             op_command_seek = read_hex_from_offset(file_path, current_location, num_bytes)
             if str(op_command_seek[:3]).upper() == "FD5" or str(op_command_seek[:3]).upper() == "FD1" or str(op_command_seek[:2]).upper() == "01":
-                next_pointer_location = hex(int(current_location, 16) + 4)
-                new_location = '{:04x}'.format(int((int(hex_location,16) + int(next_pointer_location,16))/4))
-                break
+                if str(op_command_seek[:3]).upper() == "FD1" and palette_costume != "":
+                    # Overwriting palette 
+                    new_byte_to_write = palette_costume
+                    old_byte = read_hex_from_offset(file_path,current_location,8)
+                    print(f"{last_pointer}: changing {old_byte} to {new_byte_to_write}\n")
+                    write_hex_from_offset(destination_path,current_location,new_byte_to_write)
+                    
+                    # Going 4 ahead to help skip command
+                    current_location = hex(int(current_location, 16) + 4)
+                    current_location_dec = int(current_location,16)
+                else:
+                    next_pointer_location = hex(int(current_location, 16) + 4)
+                    new_location = '{:04x}'.format(int((int(hex_location,16) + int(next_pointer_location,16))/4))
+                    break
             if current_location_dec >= file_size:
                 looping = 0
                 new_location = end_pointer
@@ -227,21 +253,26 @@ if opcode_index == "0x0":
     while 1:
         # Setting decimal value for location
         reading_loc_dec = int(reading_loc_hex,16)
-        
         # Determining indexes
         # FD5 = texture
-        if (str(data[:3]).upper() == "FD5") or (str(data[:3]).upper() == "FD9"):
+        if (texture_regex.match(str(data[:8]).upper())):
+            if debug:
+                print(f"texture data = {data}")
             if first_pointer == "0x0":
                 first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
             if texture_index == "0x0":
                 texture_index = data[8:]
         # FD1 = palette
-        elif str(data[:3]).upper() == "FD1":
+        elif (palette_regex.match(str(data[:8]).upper())):
+            if debug:
+                print(f"palette data = {data}")
             if first_pointer == "0x0":
                 first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
             base_offset = data[8:]
         # FA = primitive coloring
-        elif str(data[:8]).upper() == "FA000000":
+        elif (primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper())):
+            if debug:
+                print(f"primitive data = {data}")
             while 1:
                 # Setting as decimal to make sure we don't read over file_size
                 reading_loc_dec = int(reading_loc_hex,16)
