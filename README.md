@@ -11,6 +11,8 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
     <img src="dddcowboy.png" alt="Cowboy DDD" style="width:150px; height:auto;">
 </a>
 
+<br>
+
 <a href="https://github.com/OhThomas/smashremix/releases/tag/Latest">
     <img src="yoshiboshi.gif" alt="Code Demonstration" style="width:300px; height:auto;">
 </a>
