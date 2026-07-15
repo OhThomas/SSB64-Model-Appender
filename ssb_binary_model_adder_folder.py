@@ -8,8 +8,6 @@ import shutil
 import os
 import sys
 import subprocess
-import argparse
-import binascii
 # from ssb_binary_model_adder import read_hex_from_offset
 from ssb_binary_model_adder_arguments import args
 
@@ -129,8 +127,9 @@ try:
                 print(f"--{hex_location}: Adding {filename}; E7 at {op_index} ({op_index_segmented})")
 
             # Adding file here
-            python_file_path = os.path.join(current_directory, "ssb_binary_model_adder.py")
-            arguments = ["-file", args.o, "-file_to_add", file_to_add_path, "-add", args.add, "-subtract", args.subtract, "-offset", hex_location, "-first_pointer", args.first_pointer, "-first_pointer_file_to_add", args.first_pointer_file_to_add, "-palette_costume", args.palette_costume, "-python", args.python, "-output", args.o]
+            current_python_file_directory = os.path.dirname(os.path.realpath(__file__))
+            python_file_path = os.path.join(current_python_file_directory, "ssb_binary_model_adder.py")
+            arguments = ["-file", args.o, "-file_to_add", file_to_add_path, "-add", args.add, "-subtract", args.subtract, "-offset", hex_location, "-first_pointer", args.first_pointer, "-first_pointer_file_to_add", args.first_pointer_file_to_add, "-palette_costume", args.palette_costume, "-original_character_offset", args.original_character_offset, "-original_character_file_size", args.original_character_file_size, "-python", args.python, "-output", args.o]
             if args.debug:
                 arguments.append("-debug")
             if args.no_convert:
@@ -149,8 +148,9 @@ try:
 
             # Printing output
             if args.debug:
-                print(f"~Output:~\n")
-                print(f"{result.stdout}")
+                print(f"~Output from {args.o}:~\n\n{result.stdout}")
+                if (result.stderr):
+                    print(f"~Errors from {args.o}:~\n\n{result.stderr}")
                 
         # Deleting temporary file we used to modify pointers with
         if os.path.exists(args.o+"temp"):

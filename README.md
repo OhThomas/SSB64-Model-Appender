@@ -11,6 +11,10 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
     <img src="dddcowboy.png" alt="Cowboy DDD" style="width:150px; height:auto;">
 </a>
 
+<a href="https://github.com/OhThomas/smashremix/releases/tag/Latest">
+    <img src="yoshiboshi.gif" alt="Code Demonstration" style="width:300px; height:auto;">
+</a>
+
 ## Usage
 | Case | Example |
 | :------- | :------- |
@@ -22,6 +26,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | Append a model to a specific location (0x8380) within a file: | `python ssb_binary_model_adder.py -file peppy_cowboy.bin -file_to_add peppy_cowboy_cig.bin -offset 0x8380`|
 | Append a folder of parts to a model: | `python ssb_binary_model_adder.py -file 1557_isaac -folder_to_add folder_of_parts`|
 | Change texture palette: | `python ssb_binary_model_adder.py -file 1557_isaac -folder_to_add folder_of_parts -costume DE0000000E000000`|
+| Add parts that use original character data (give the RAM offset of that character): | `python ssb_binary_model_adder.py -file 0152_boshi -folder_to_add folder_of_parts -original_character_offset 0x802ede10`|
 
 ## Arguments
 | Argument | Description |
@@ -36,6 +41,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | -first_pointer_file_to_add | First pointer in the file we're adding, if -2 then we don't change any pointers (usually following the first FD command) (as a string, ex: '0xA4').|
 | -no_convert | Prevents converting the binary file_to_add from a single pointer to a 2 pointer command.|
 | -costume | Changes FD1 (palette) command with DE000000 0EXXXXXX to make palette based on costume palette. Enter entire DE command, ex 'DE0000000E000000'.|
+| -original_character_offset | Changes pointer data to the appropriate location if parts you are adding use vertices/animations/textures/palettes/etc from the original character. Give the characters offset as a string, ex '0x802ede10'.|
 | -debug | Prints debugging messages to output.|
 | -python | Python version or location to run python commands with.|
 | -overwrite | Forces overwrite, making output go to -file.|

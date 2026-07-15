@@ -8,6 +8,7 @@ import os
 import argparse
 import binascii
 import re
+from inspect import currentframe, getframeinfo
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-file", "--file",required=True,type=str,help="File we're converting.")
@@ -18,6 +19,8 @@ parser.add_argument("-ti","--ti","-texture_index", "--texture_index",default="0x
 parser.add_argument("-vi","--vi","-vertice_index", "--vertice_index",default="0x0",type=str,help="Location where vertices start in file (as a string, ex: '0x14').")
 parser.add_argument("-oi","--oi","-opcode_index", "--opcode_index",default="0x0",type=str,help="Location where opcodes start in file (as a string, ex: '0x14').")
 parser.add_argument("-palette_costume","--palette_costume","-costume","--costume",default="",help="Changes FD1 (palette) command with DE000000 0EXXXXXX to make palette based on costume palette. Enter entire DE command, ex DE0000000E000000.")
+parser.add_argument("-original_character_offset","--original_character_offset",default="-1",type=str,help="Hexadecimal location of where the original character file started when adding the parts to the RAM (as a string, ex: '0x802EDE10') (this can help add parts that use original character data).")
+parser.add_argument("-original_character_file_size","--original_character_file_size",default=-1,type=int,help="File size of original character file. This is used in tandem with original_character_offset to find data locations that are and aren't in the original character file.")
 parser.add_argument("-debug","--debug",action="store_true",help="Prints debugging messages to output.")
 parser.add_argument("-overwrite","--overwrite","-force","--force",action="store_true",help="Forces overwrite, making output go to -file.")
 parser.add_argument("-o","--o","-output","--output",default="output.bin",type=str,help="Output file.")
@@ -32,6 +35,8 @@ texture_index = args.ti
 vertice_index = args.vi
 opcode_index = args.oi
 palette_costume = args.palette_costume
+original_character_offset = args.original_character_offset
+original_character_file_size = args.original_character_file_size
 debug = args.debug
 overwrite = args.overwrite
 output_path = args.o
@@ -46,6 +51,9 @@ palette_regex = re.compile(r'FD[1][0-8]0000')
 primitive_regex = re.compile(r'FA000000')
 primitive_sync_regex = re.compile(r'E8000000')
 costume_regex = re.compile(r'DE0000000E[0-9]{6}')
+
+def error_message(e,cf=currentframe()):
+    print(f'File "{os.path.basename(getframeinfo(cf).filename)}", line {cf.f_lineno}, An error occurred: \n{e}\n')
 
 # Duplicating file
 try:
@@ -62,7 +70,7 @@ try:
         destination_path = os.path.join(current_directory, output_path)
 
     if file_path == output_path:
-        print(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
+        error_message(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
         exit(1)
 
     # Deleting output file 
@@ -74,15 +82,15 @@ try:
     if debug:
         print(f"File '{os.path.basename(file_path)}' copied and renamed to '{os.path.basename(output_path)}' successfully.\n")
 except FileNotFoundError:
-    print(f"Error: The file '{file_path}' was not found.")
+    error_message(f"Error: The file '{file_path}' was not found.")
     exit(1)
 except Exception as e:
-    print(f"An error occurred: {e}")
+    error_message(f"An error occurred: {e}")
     exit(1)
 
 # Checking palette_costume argument
 if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
-    print(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
+    error_message(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
     exit(1)
 
 # Reads hexadecimal data from a file with hex offset given
@@ -106,9 +114,9 @@ def read_hex_from_offset(file_path, offset, num_bytes):
             #print(f"Data read at {offset}: {data.hex()}")
             return data.hex()
     except FileNotFoundError:
-        print(f"Error: File not found at {file_path}")
+        error_message(f"Error: File not found at {file_path}")
     except ValueError:
-        print(f"Error: Invalid hex location '{offset}'")
+        error_message(f"Error: Invalid hex location '{offset}'")
     return None
 
 # Writes hexadecimal data to a file with hex offset given
@@ -132,11 +140,11 @@ def write_hex_from_offset(new_file_path, offset, hex_string):
             f.write(binary_data)
             #print(f"Data written at {offset}: {hex_string} as {binary_data}")
     except FileNotFoundError:
-        print(f"Error: File not found at {new_file_path}")
+        error_message(f"Error: File not found at {new_file_path}")
     except ValueError:
-        print(f"Error: Invalid hex location '{offset}'")
+        error_message(f"Error: Invalid hex location '{offset}'")
     except binascii.Error as e:
-        print(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
+        error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
 
 # Used to convert a file that was made with Model2F3DEX2SSB with single pointer addresses meant for RAM, into 2 pointers
 def convert_single_pointer_file(file_path=file_path,destination_path=destination_path,hex_content_new_file=hex_content,current_location=current_location,num_bytes=num_bytes,pointers_overwritten=pointers_overwritten,end_pointer="FFFF"):
@@ -192,7 +200,20 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
     # Now use force difference to find data location throughout the rest of the file
     # and update the file pointers as you go
     while looping:
-        data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(force_difference,16))/4))
+        # Checking if data came from original character file, if so use that location
+        if original_character_offset != "-1":
+            # Checking if current data value(location) is in the original character file
+            # if so, data_location = hex_content_new_file - original_character_offset
+            if int(hex_content_new_file,16) >= int(original_character_file_size) and int(hex_content_new_file,16) < int(original_character_file_size) + int(original_character_offset,16):
+                data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(original_character_offset,16))/4))
+            else:
+                data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(force_difference,16))/4))
+                
+            if debug:
+                print(f"hex_content_new_file = {hex(int(hex_content_new_file,16))} original_character_offset = {original_character_offset} original_character_file_size = {hex(original_character_file_size)} data_location = {data_location}")
+        else:
+            data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(force_difference,16))/4))
+
         # Looking for next op command with a pointer to update the last accordingly
         while op_command_seek:
             current_location = hex(int(current_location, 16) + 4)
@@ -226,8 +247,11 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
         pointers_overwritten = pointers_overwritten + 1
 
         # Going to next pointer
-        last_pointer = next_pointer_location
-        hex_content_new_file = read_hex_from_offset(file_path,next_pointer_location,num_bytes)
+        if next_pointer_location != 0:
+            last_pointer = next_pointer_location
+            hex_content_new_file = read_hex_from_offset(file_path,next_pointer_location,num_bytes)
+        else:
+            break
 
         # Getting command from current location
         current_command = hex(int(current_location, 16))
@@ -249,28 +273,20 @@ if opcode_index == "0x0":
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+    no_index_found = False  # only set true if no other index found
+    opcode_found = False    # only set true if no other index found
 
+    # Determining indexes
     while 1:
         # Setting decimal value for location
         reading_loc_dec = int(reading_loc_hex,16)
-        # Determining indexes
-        # FD5 = texture
-        if (texture_regex.match(str(data[:8]).upper())):
-            if debug:
-                print(f"texture data = {data}")
-            if first_pointer == "0x0":
-                first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
-            if texture_index == "0x0":
-                texture_index = data[8:]
-        # FD1 = palette
-        elif (palette_regex.match(str(data[:8]).upper())):
-            if debug:
-                print(f"palette data = {data}")
-            if first_pointer == "0x0":
-                first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
-            base_offset = data[8:]
-        # FA = primitive coloring
-        elif (primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper())):
+        
+        # If no index found
+        if no_index_found and not opcode_found:
+            if str(data[:8]).upper() == "E7000000":
+                opcode_found = True
+        # FA = primitive coloring; E7 = opcode found if no other index detected
+        elif ((primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper())) or opcode_found):
             if debug:
                 print(f"primitive data = {data}")
             while 1:
@@ -290,7 +306,7 @@ if opcode_index == "0x0":
 
                 # No more to read, exiting
                 if reading_loc_dec >= file_size:
-                    print("Couldn't find indexes, exiting.")
+                    error_message("Couldn't find indexes, exiting.")
                     exit(1)
 
                 # Reading next 8 bytes
@@ -299,14 +315,40 @@ if opcode_index == "0x0":
                 data = read_hex_from_offset(file_path, reading_loc_hex, 8)
             # base_offset = data[4:]
             break
+        # FD5 = texture
+        if (texture_regex.match(str(data[:8]).upper())):
+            if debug:
+                print(f"texture data = {data}")
+            if first_pointer == "0x0":
+                first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
+            if texture_index == "0x0":
+                texture_index = data[8:]
+        # FD1 = palette
+        elif (palette_regex.match(str(data[:8]).upper())):
+            if debug:
+                print(f"palette data = {data}")
+            if first_pointer == "0x0":
+                first_pointer = hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
+            base_offset = data[8:]
         elif str(data[:8]).upper() == "E7000000":
             if opcode_index == "0x0":
                 opcode_index = reading_loc_hex
 
-        # No more to read, exiting
-        if reading_loc_dec >= file_size:
-            print("Couldn't find indexes, exiting.")
-            exit(1)
+        
+        # If everything else fails (no index set), then we go through and see if
+        # there's an 01 command after an E7 command for our first pointer
+        if reading_loc_dec >= file_size and base_offset == "0x0":
+            if not no_index_found:
+                no_index_found = True
+                reading_loc = "0x0"
+                file_size = int(os.path.getsize(file_path))
+                reading_loc_hex = hex(int(reading_loc, 16))
+                data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+                continue
+            # If we're here then even that failed, exit
+            else:
+                error_message("Couldn't find indexes, exiting.")
+                exit(1)
 
         # Reading next 8 bytes
         reading_loc = hex(int(reading_loc, 16) + 8)
@@ -315,7 +357,7 @@ if opcode_index == "0x0":
 
     # Finished indexing, making sure we have a base_offset
     if base_offset == "0x0":
-        print("Couldn't find a single pointer, exiting.")
+        error_message("Couldn't find a single pointer, exiting.")
         exit(1)
     
     # Set other indexes

@@ -10,6 +10,7 @@ import subprocess
 import argparse
 import binascii
 import re
+from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
 
 file_path = args.file
@@ -26,9 +27,12 @@ palette_costume = args.palette_costume
 python_version = args.python
 overwrite = args.overwrite
 output_path = args.o
+original_character_offset = args.original_character_offset
+original_character_file_size = args.original_character_file_size
 num_bytes = 4
 offset_to_add = 0
 pointers_overwritten = 0
+current_python_file_directory = os.path.dirname(os.path.realpath(__file__))
 
 # Regex expressions
 texture_regex = re.compile(r'FD[2-9,A-F][0-8]0000')
@@ -36,25 +40,35 @@ palette_regex = re.compile(r'FD[1][0-8]0000')
 primitive_regex = re.compile(r'FA000000')
 costume_regex = re.compile(r'DE0000000E[0-9]{6}')
 
+def error_message(e,cf=currentframe()):
+    print(f'File "{os.path.basename(getframeinfo(cf).filename)}", line {cf.f_lineno}, An error occurred: \n{e}\n')
+
+# Checking if original_character_file_size is set
+if original_character_offset != "-1" and original_character_file_size == "-1":
+    original_character_file_size = str(os.path.getsize(file_path))
+    args.original_character_file_size = original_character_file_size
+
+# Folder code redirection
 if folder_to_add_path != "":
     # Get the current working directory
     current_directory = os.getcwd()
 
     # Define the arguments to pass to the script
-    python_convert_path = os.path.join(current_directory, "ssb_binary_model_adder_folder.py")
-    arguments = ["-file", file_path, "-file_to_add", file_to_add_path, "-folder_to_add", folder_to_add_path, "-add", add, "-subtract", subtract, "-offset", hex_location, "-first_pointer", first_pointer, "-first_pointer_file_to_add", first_pointer_fta, "-palette_costume", args.palette_costume, "-python", python_version, "-output", output_path]
+    python_convert_path = os.path.join(current_python_file_directory, "ssb_binary_model_adder_folder.py")
+    arguments = ["-file", file_path, "-file_to_add", file_to_add_path, "-folder_to_add", folder_to_add_path, "-add", add, "-subtract", subtract, "-offset", hex_location, "-first_pointer", first_pointer, "-first_pointer_file_to_add", first_pointer_fta, "-palette_costume", args.palette_costume, "-original_character_offset", args.original_character_offset, "-original_character_file_size", args.original_character_file_size, "-python", python_version, "-output", output_path]
     if debug:
         arguments.append("-debug")
     if not convert:
         arguments.append("-no_convert")
-    # if args.palette_costume:
-    #     arguments.append("-palette_costume")
     if overwrite:
         arguments.append("-overwrite")
     # command = [python_version, python_convert_path]
     command = [python_version, python_convert_path] + arguments
     # Converting file_to_add
     result = subprocess.run(command, capture_output=True, text=True)
+    
+    if debug:
+        print(f"command = {command}")
 
     # Printing output
     print(f"~Output {os.path.basename(file_to_add_path)}~\n")
@@ -62,15 +76,15 @@ if folder_to_add_path != "":
 
     exit(0)
 
-
+# Checking arguments
 if file_to_add_path == "" and subtract == "" and add == "":
-    print(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract, subtract = '{subtract}', nothing to do, exiting.")
+    error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract, subtract = '{subtract}', nothing to do, exiting.")
     exit(1)
 if add != "" and subtract != "":
-    print(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
+    error_message(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
     exit(1)
 if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
-    print(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
+    error_message(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
     exit(1)
 
 # Duplicating file
@@ -99,7 +113,7 @@ try:
         destination_path = os.path.join(current_directory, output_path)
 
     if file_path == output_path:
-        print(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
+        error_message(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
         exit(1)
 
     # Deleting output file 
@@ -111,14 +125,14 @@ try:
     if debug:
         print(f"File '{os.path.basename(file_path)}' copied and renamed to '{os.path.basename(output_path)}' successfully.")
 except FileNotFoundError as e:
-    print(f"{e}")
+    error_message(f"{e}")
     exit(1)
 except Exception as e:
-    print(f"An error occurred: {e}")
+    error_message(e)
     exit(1)
 
 if offset_to_add < 4 and offset_to_add > -4:
-    print(f"File size of '{file_to_add_path}' or add size '{add}' or subtract size '{subtract}' not adequate, has to at least be 4.")
+    error_message(f"File size of '{file_to_add_path}' or add size '{add}' or subtract size '{subtract}' not adequate, has to at least be 4.")
     exit(1)
 else:
     offset_to_add = int(offset_to_add / 4)
@@ -144,9 +158,9 @@ def read_hex_from_offset(file_path, offset, num_bytes):
             #print(f"Data read at {offset}: {data.hex()}")
             return data.hex()
     except FileNotFoundError:
-        print(f"Error: File not found at {file_path}")
+        error_message(f"Error: File not found at {file_path}")
     except ValueError:
-        print(f"Error: Invalid hex location '{offset}'")
+        error_message(f"Error: Invalid hex location '{offset}'")
     return None
 
 # Writes hexadecimal data to a file with hex offset given
@@ -170,11 +184,11 @@ def write_hex_from_offset(new_file_path, offset, hex_string):
             f.write(binary_data)
             #print(f"Data written at {offset}: {hex_string} as {binary_data}")
     except FileNotFoundError:
-        print(f"Error: File not found at {new_file_path}")
+        error_message(f"Error: File not found at {new_file_path}")
     except ValueError:
-        print(f"Error: Invalid hex location '{offset}'")
+        error_message(f"Error: Invalid hex location '{offset}'")
     except binascii.Error as e:
-        print(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
+        error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
 
 # Appends hexadecimal data to a file with hex offset given
 def append_hex_from_offset(new_file_path, offset, hex_string):
@@ -200,11 +214,11 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
             f.write(remaining_data)
             #print(f"Data written at {offset}: {hex_string} as {binary_data}")
     except FileNotFoundError:
-        print(f"Error: File not found at {new_file_path}")
+        error_message(f"Error: File not found at {new_file_path}")
     except ValueError as e:
-        print(f"Error: Invalid hex location '{offset}' '{e}'")
+        error_message(f"Error: Invalid hex location '{offset}' '{e}'")
     except binascii.Error as e:
-        print(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
+        error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
 
 # Returns last pointer based on last DF command in file_path
 def find_last_pointer(file_path=file_path):
@@ -273,21 +287,20 @@ def find_first_pointer(file_path=file_path):
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+    no_index_found = False  # only set true if no other index found
+    opcode_found = False    # only set true if no other index found
 
+    # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
         reading_loc_dec = int(reading_loc_hex,16)
 
-        # Determining if indexes
-        # FD5 = texture
-        if (texture_regex.match(str(data[:8]).upper())):
-            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
-        # FD1 = palette
-        elif (palette_regex.match(str(data[:8]).upper())):
-            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
-        # FA = primitive coloring
-        elif (primitive_regex.match(str(data[:8]).upper())):
-
+        # If no index found
+        if no_index_found and not opcode_found:
+            if str(data[:8]).upper() == "E7000000":
+                opcode_found = True
+        # FA = primitive coloring; E7 = opcode found if no other index detected
+        elif (primitive_regex.match(str(data[:8]).upper()) or opcode_found):
             # Looking for next 01 command to determine first pointer
             while 1:
                 # Setting decimal value to make sure we don't read over file size
@@ -307,11 +320,27 @@ def find_first_pointer(file_path=file_path):
                 reading_loc_hex = hex(int(reading_loc,16))
                 data = read_hex_from_offset(file_path, reading_loc_hex, 8)
             return -1
-
-        # No more to read, exiting
+        # FD5 = texture
+        elif (texture_regex.match(str(data[:8]).upper())):
+            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
+        # FD1 = palette
+        elif (palette_regex.match(str(data[:8]).upper())):
+            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
+        
+        # If everything else fails (no index found), then we go through and see if
+        # there's an 01 command after an E7 command for our first pointer
         if reading_loc_dec >= file_size:
-            print("Couldn't find indexes, exiting.")
-            return -1
+            if not no_index_found:
+                no_index_found = True
+                reading_loc = "0x0"
+                file_size = int(os.path.getsize(file_path))
+                reading_loc_hex = hex(int(reading_loc, 16))
+                data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+                continue
+            # If we're here then even that failed, exit
+            else:
+                error_message("Couldn't find indexes, exiting.")
+                return -1
 
         # Reading next 8 bytes
         reading_loc = hex(int(reading_loc, 16) + 8)
@@ -327,7 +356,7 @@ if first_pointer == "-1":
 
 # If first_pointer is still -1 then something went wrong
 if first_pointer == "-1":
-    print(f"Error finding first pointer in {file_path}, first_pointer = {first_pointer}")
+    error_message(f"Error finding first pointer in {file_path}, first_pointer = {first_pointer}")
     exit(1)
 
 # Making sure offset is set
@@ -462,7 +491,7 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
 
         # Making sure there's another pointer
         if hex_content_upper_offset == 0:
-            print(f"Error, pointer at {hex_content} not pointing to anything. First 4 bytes are {new_upper_offset_padded}")
+            error_message(f"Error, pointer at {hex_content} not pointing to anything. First 4 bytes are {new_upper_offset_padded}")
             exit(1)
 
         # If the offset we're adding is before the pointer locations, then we need to change them and add the offset
@@ -490,7 +519,7 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
 
         # Making sure new bytes aren't bigger than possible (0xFFFF)
         if new_upper_offset >= 65536 or new_lower_offset >= 65536:
-            print(f"Error with lower_offset: {new_lower_offset} or upper_offset:{new_upper_offset} being greater than 0xFFFF.")
+            error_message(f"Error with lower_offset: {new_lower_offset} or upper_offset:{new_upper_offset} being greater than 0xFFFF.")
             exit(1)
 
         # One or both of the pointers was after our insertion, so we must add the offset and update
@@ -518,7 +547,7 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
         current_location = hex((int(hex_content_upper_offset) * 4) + force_offset)
         hex_content = read_hex_from_offset(file_path, current_location, num_bytes)
     else:
-        print("Error, couldn't find pointer.")
+        error_message("Error, couldn't find pointer.")
         exit(1)
 
 # Updating base file pointers
@@ -540,9 +569,9 @@ if file_to_add_path != "":
                 file_to_add_data = f.read()
                 append_hex_from_offset(destination_path,hex_location,file_to_add_data)
         except FileNotFoundError:
-            print(f"Error: The file {file_to_add_path} was not found.")
+            error_message(f"Error: The file {file_to_add_path} was not found.")
         except Exception as e:
-            print(f"An error occurred: {e}")
+            error_message(e)
         exit(0)
 
     # Determining last pointer based on DF command and what to update it to based on first pointer in file_to_add
@@ -562,20 +591,20 @@ if file_to_add_path != "":
         # Converting file_to_add to a ROM model (from 1 to 2 pointers per pointer command)
         if convert:
             # Define the arguments to pass to the script
-            python_convert_path = os.path.join(current_directory, "ssb_binary_model_converter.py")
-            arguments = ["-file", file_to_add_path, "-output", file_to_add_path_temp, "-offset", hex_location, "-palette_costume", args.palette_costume]
+            python_convert_path = os.path.join(current_python_file_directory, "ssb_binary_model_converter.py")
+            arguments = ["-file", file_to_add_path, "-output", file_to_add_path_temp, "-offset", hex_location, "-palette_costume", args.palette_costume, "-original_character_offset", args.original_character_offset, "-original_character_file_size", args.original_character_file_size]
             if debug:
                 arguments.append("-debug")
-            # if args.palette_costume:
-            #     arguments.append("-palette_costume")
             command = [python_version, python_convert_path] + arguments
 
             # Converting file_to_add
             result = subprocess.run(command, capture_output=True, text=True, check=True)
 
             # Printing output
-            print(f"~Converting {os.path.basename(file_to_add_path)}~\n")
-            print(f"{result.stdout}")
+            print(f"~Converting {os.path.basename(file_to_add_path)}~\n\n{result.stdout}")
+
+            if debug and result.stderr:
+                error_message(f"~Errors from {args.o}:~\n\n{result.stderr}")
         # Updating file_to_add pointers
         else:
             # Copying file_to_add
@@ -621,7 +650,7 @@ if file_to_add_path != "":
         if os.path.exists(file_to_add_path_temp):
             os.remove(file_to_add_path_temp)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        error_message(e)
 
 # Overwriting base file
 if overwrite:
