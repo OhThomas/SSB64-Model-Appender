@@ -38,6 +38,8 @@ current_python_file_directory = os.path.dirname(os.path.realpath(__file__))
 texture_regex = re.compile(r'FD[2-9,A-F][0-8]0000')
 palette_regex = re.compile(r'FD[1][0-8]0000')
 primitive_regex = re.compile(r'FA000000')
+primitive_sync_regex = re.compile(r'E8000000')
+rdp_sync_regex = re.compile(r'E7000000')
 costume_regex = re.compile(r'DE0000000E[0-9]{6}')
 
 def error_message(e,cf=currentframe()):
@@ -283,64 +285,37 @@ def find_first_pointer(file_path=file_path):
         int: Location of first pointer; returns -1 if nothing found.
     """
     # Setting variables
-    reading_loc = "0x0"
+    reading_loc = "0x00"
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 8)
-    no_index_found = False  # only set true if no other index found
-    opcode_found = False    # only set true if no other index found
+    commands_found = False    # used to look for 01 command
 
     # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
         reading_loc_dec = int(reading_loc_hex,16)
 
-        # If no index found
-        if no_index_found and not opcode_found:
-            if str(data[:8]).upper() == "E7000000":
-                opcode_found = True
-        # FA = primitive coloring; E7 = opcode found if no other index detected
-        elif (primitive_regex.match(str(data[:8]).upper()) or opcode_found):
-            # Looking for next 01 command to determine first pointer
-            while 1:
-                # Setting decimal value to make sure we don't read over file size
-                reading_loc_dec = int(reading_loc_hex,16)
-
-                # Checking for 01 command
-                if (str(data[:2]).upper() == "01"):
-                    return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the 01 command
-
-                # No more to read, exiting
-                if reading_loc_dec >= file_size:
-                    print("Couldn't find indexes, exiting.")
-                    return -1
-
-                # Reading next 8 bytes
-                reading_loc = hex(int(reading_loc, 16) + 8)
-                reading_loc_hex = hex(int(reading_loc,16))
-                data = read_hex_from_offset(file_path, reading_loc_hex, 8)
-            return -1
+        # Checking for 01 command when certain regex have been seen
+        if commands_found:
+            # Checking for 01 command
+            if (str(data[:2]).upper() == "01"):
+                return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the 01 command
         # FD5 = texture
-        elif (texture_regex.match(str(data[:8]).upper())):
+        if (texture_regex.match(str(data[:8]).upper())):
             return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
         # FD1 = palette
         elif (palette_regex.match(str(data[:8]).upper())):
             return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
+        # Look for 01 commands if we see these regex; FA = primitive coloring; E8 = tile; E7 = RDP sync
+        elif primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper()) or rdp_sync_regex.match(str(data[:8]).upper()):
+            commands_found = True
         
         # If everything else fails (no index found), then we go through and see if
         # there's an 01 command after an E7 command for our first pointer
         if reading_loc_dec >= file_size:
-            if not no_index_found:
-                no_index_found = True
-                reading_loc = "0x0"
-                file_size = int(os.path.getsize(file_path))
-                reading_loc_hex = hex(int(reading_loc, 16))
-                data = read_hex_from_offset(file_path, reading_loc_hex, 8)
-                continue
-            # If we're here then even that failed, exit
-            else:
-                error_message("Couldn't find indexes, exiting.")
-                return -1
+            error_message("Couldn't find first pointer, exiting.")
+            return -1
 
         # Reading next 8 bytes
         reading_loc = hex(int(reading_loc, 16) + 8)
@@ -374,6 +349,7 @@ hex_content = read_hex_from_offset(file_path, first_pointer, num_bytes)
 current_location = first_pointer
 
 # Getting base offset
+# TODO: Look for 01 command after appropriate commands seen
 def get_base_offset_ROM(file_path=file_path):
     """
     Gets base offset pointers use in a ROM model file. (Finds pointers based on op commands) 
@@ -390,8 +366,8 @@ def get_base_offset_ROM(file_path=file_path):
         print(f"Getting base offset in {os.path.basename(file_path)}:")
     
     # Setting variables
-    reading_loc = "0x0"
-    base_offset = "0x0"
+    reading_loc = "0x00"
+    base_offset = "0x00"
     base_offset_dec = 65535 # FFFF
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
@@ -542,6 +518,10 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
         if hex_content_upper_offset == 65535:
             print(f"Done writing to {os.path.basename(destination_path)}, total pointers overwritten = {pointers_overwritten}\n")
             return None
+
+        # Update our next pointer location if it was changed
+        if hex_content_upper_offset >= hex_location_section:
+            hex_content_upper_offset = new_upper_offset
 
         # Going to next pointer location
         current_location = hex((int(hex_content_upper_offset) * 4) + force_offset)

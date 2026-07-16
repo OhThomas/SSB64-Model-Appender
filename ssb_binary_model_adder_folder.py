@@ -40,7 +40,7 @@ def read_hex_from_offset(file_path, offset, num_bytes):
 # Finds first E7 command offset
 def find_op_index(file_path):
     # Setting variables
-    reading_loc = "0x0"
+    reading_loc = "0x00"
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 8)
@@ -62,7 +62,7 @@ def find_op_index(file_path):
         reading_loc = hex(int(reading_loc, 16) + 8)
         reading_loc_hex = hex(int(reading_loc,16))
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
-    return "0x0"
+    return "0x00"
     
 try:
     # Get the current working directory
