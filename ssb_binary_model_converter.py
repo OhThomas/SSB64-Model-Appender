@@ -51,6 +51,7 @@ palette_regex = re.compile(r'FD[1][0-8]0000')
 primitive_regex = re.compile(r'FA000000')
 primitive_sync_regex = re.compile(r'E8000000')
 rdp_sync_regex = re.compile(r'E7000000')
+jump_regex = re.compile(r'DE0[0,1]000080[0-7][0-9,A-F]{5}')
 costume_regex = re.compile(r'DE0000000E[0-9]{6}')
 vertice_regex = re.compile(r'01[0-9,A-F]{6}80[0-7][0-9,A-F]{5}')
 
@@ -242,8 +243,8 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
             current_location_dec = int(current_location,16)
             op_command_seek = read_hex_from_offset(file_path, current_location, 8)
 
-            # if op_command_seek = FD1, FD5, or 01 command
-            if texture_regex.match(str(op_command_seek[:8]).upper()) or palette_regex.match(str(op_command_seek[:8]).upper()) or vertice_regex.match(str(op_command_seek).upper()):
+            # if op_command_seek = FD1, FD5, 01, or DE command
+            if texture_regex.match(str(op_command_seek[:8]).upper()) or palette_regex.match(str(op_command_seek[:8]).upper()) or vertice_regex.match(str(op_command_seek).upper()) or jump_regex.match(str(op_command_seek).upper()):
                 if str(op_command_seek[:3]).upper() == "FD1" and palette_costume != "":
                     # Overwriting palette 
                     new_byte_to_write = palette_costume
