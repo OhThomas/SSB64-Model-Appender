@@ -169,6 +169,38 @@ def original_data(pointer):
             return True
     return False
 
+def set_pointer_difference(hex_location,hex_content_new_file,opcode):
+    """
+    Returns the base offset to correctly update pointers based on hex_location (base file),
+    their current location(file we're adding), and their opcode.
+
+    Args:
+        hex_location (string):          Base offset we add to (usually size of the original character file).
+        hex_content_new_file (string):  Current location.
+        opcode (string):                Current opcode (FD1,FD5,01,etc).
+
+    Returns:
+        int: What to add to the new pointers; returns 0 if pointer is in original character.
+    """
+    # Return 0 if pointing to original character data
+    if original_character_offset != -1 and (int(hex_content_new_file,16) >= int(original_character_offset,16) and int(hex_content_new_file,16) < int(original_character_file_size) + int(original_character_offset,16)):
+        return 0
+    
+    # FD5 = texture
+    if (str(opcode[:3]).upper() == "FD5") or (str(opcode[:3]).upper() == "FD9"):
+        hex_location_padded = int(hex_location, 16) + int(texture_index, 16)
+    # FD1 = palette
+    elif str(opcode[:3]).upper() == "FD1":
+        hex_location_padded = int(hex_location, 16) + int(palette_index, 16)
+    # 01 = vertices
+    elif str(opcode[:2]).upper() == "01":
+        hex_location_padded = int(hex_location, 16) + int(vertice_index, 16)
+    else:
+        hex_location_padded = 0
+    force_difference = hex(int(hex_content_new_file,16)-hex_location_padded)
+
+    return force_difference
+
 # Used to convert a file that was made with Model2F3DEX2SSB with single pointer addresses meant for RAM, into 2 pointers
 def convert_single_pointer_file(file_path=file_path,destination_path=destination_path,hex_content_new_file=hex_content,current_location=current_location,num_bytes=num_bytes,pointers_overwritten=pointers_overwritten,end_pointer="FFFF"):
     """
@@ -200,21 +232,8 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
     if debug:
         print(f"first opcode = {opcode} at {opcode_pointer}")
 
-    # Determining op command and finding difference based on that
-    # FD5 = texture
-    if (str(opcode[:3]).upper() == "FD5") or (str(opcode[:3]).upper() == "FD9"):
-        hex_location_padded = int(hex_location, 16) + int(texture_index, 16)
-    # FD1 = palette
-    elif str(opcode[:3]).upper() == "FD1":
-        hex_location_padded = int(hex_location, 16) + int(palette_index, 16)
-    # 01 = vertices
-    elif str(opcode[:2]).upper() == "01":
-        hex_location_padded = int(hex_location, 16) + int(vertice_index, 16)
-    else:
-        hex_location_padded = 0
-
     # Setting up to read through file
-    force_difference = hex(int(hex_content_new_file,16)-hex_location_padded)
+    force_difference = 0
     next_pointer_location = 0
     looping = 1
     current_command = hex(int(current_location, 16) - 4)
@@ -223,17 +242,21 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
     # Now use force difference to find data location throughout the rest of the file
     # and update the file pointers as you go
     while looping:
+        # Determining op command and finding difference based on that,
+        # update everytime incase first pointer is in the original character
+        force_difference = set_pointer_difference(hex_location,hex_content_new_file,current_command)
+
         # Checking if data came from original character file, if so use that location
         if original_character_offset != "-1":
             # Checking if current data value(location) is in the original character file
             # if so, data_location = hex_content_new_file - original_character_offset
-            if int(hex_content_new_file,16) >= int(original_character_file_size) and int(hex_content_new_file,16) < int(original_character_file_size) + int(original_character_offset,16):
+            if int(hex_content_new_file,16) >= int(original_character_offset,16) and int(hex_content_new_file,16) < int(original_character_file_size) + int(original_character_offset,16):
                 data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(original_character_offset,16))/4))
             else:
                 data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(force_difference,16))/4))
                 
             if debug:
-                print(f"hex_content_new_file = {hex(int(hex_content_new_file,16))} original_character_offset = {original_character_offset} original_character_file_size = {hex(original_character_file_size)} data_location = {data_location}")
+                print(f"hex_content_new_file = {hex(int(hex_content_new_file,16))} original_character_offset = {original_character_offset} original_character_file_size = {hex(original_character_file_size)} data_location = {data_location} force_difference = {force_difference} hex_location = {hex_location}")
         else:
             data_location = '{:04x}'.format(int((int(hex_content_new_file,16) - int(force_difference,16))/4))
 

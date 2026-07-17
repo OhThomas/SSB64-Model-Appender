@@ -273,6 +273,42 @@ def find_last_pointer(file_path=file_path):
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
 
 
+# Finds first pointer based on first non zero data in file (used for full pointer conversion on original character file)
+def find_first_pointer_original_character(file_path=file_path):
+    """
+    Finds first pointer location in f3dex model file by looking for first non zero data.
+
+    Args:
+        file_path (string): Source file.
+
+    Returns:
+        int: Location of first pointer; returns -1 if nothing found.
+    """
+    # Setting variables
+    reading_loc = "0x00"
+    file_size = int(os.path.getsize(file_path))
+    reading_loc_hex = hex(int(reading_loc, 16))
+    data = read_hex_from_offset(file_path, reading_loc_hex, 2)
+     # Determining index values
+    while 1:
+        # Setting decimal value to make sure we don't read over file size
+        reading_loc_dec = int(reading_loc_hex,16)
+        
+        # Checking for 01 command
+        if (str(data).upper() != "0000"):
+            return hex(int(reading_loc_hex, 16))
+        
+        # If at the end of the file, exit.
+        if reading_loc_dec >= file_size:
+            error_message("Couldn't find first pointer in original character file, exiting.")
+            return -1
+        
+        # Reading next 8 bytes
+        reading_loc = hex(int(reading_loc, 16) + 8)
+        reading_loc_hex = hex(int(reading_loc,16))
+        data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+    return -1
+
 # Finds first pointer based on op commands in a f3dex model file
 def find_first_pointer(file_path=file_path):
     """
@@ -325,7 +361,7 @@ def find_first_pointer(file_path=file_path):
 
 # Making sure first_pointer is set
 if first_pointer == "-1":
-    first_pointer = find_first_pointer(file_path)
+    first_pointer = find_first_pointer_original_character(file_path)
     if debug:
         print(f"First pointer in {os.path.basename(file_path)} set to {first_pointer}")
 
@@ -519,9 +555,9 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
             print(f"Done writing to {os.path.basename(destination_path)}, total pointers overwritten = {pointers_overwritten}\n")
             return None
 
-        # Update our next pointer location if it was changed
-        if hex_content_upper_offset >= hex_location_section:
-            hex_content_upper_offset = new_upper_offset
+        # Update our next pointer location if it was changed (only do this if the content is already added)
+        #if hex_content_upper_offset >= hex_location_section:
+            # hex_content_upper_offset = new_upper_offset
 
         # Going to next pointer location
         current_location = hex((int(hex_content_upper_offset) * 4) + force_offset)
