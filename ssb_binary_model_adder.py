@@ -50,36 +50,8 @@ if original_character_offset != "-1" and original_character_file_size == "-1":
     original_character_file_size = str(os.path.getsize(file_path))
     args.original_character_file_size = original_character_file_size
 
-# Folder code redirection
-if folder_to_add_path != "":
-    # Get the current working directory
-    current_directory = os.getcwd()
-
-    # Define the arguments to pass to the script
-    python_convert_path = os.path.join(current_python_file_directory, "ssb_binary_model_adder_folder.py")
-    arguments = ["-file", file_path, "-file_to_add", file_to_add_path, "-folder_to_add", folder_to_add_path, "-add", add, "-subtract", subtract, "-offset", hex_location, "-first_pointer", first_pointer, "-first_pointer_file_to_add", first_pointer_fta, "-palette_costume", args.palette_costume, "-original_character_offset", args.original_character_offset, "-original_character_file_size", args.original_character_file_size, "-python", python_version, "-output", output_path]
-    if debug:
-        arguments.append("-debug")
-    if not convert:
-        arguments.append("-no_convert")
-    if overwrite:
-        arguments.append("-overwrite")
-    # command = [python_version, python_convert_path]
-    command = [python_version, python_convert_path] + arguments
-    # Converting file_to_add
-    result = subprocess.run(command, capture_output=True, text=True)
-    
-    if debug:
-        print(f"command = {command}")
-
-    # Printing output
-    print(f"~Output {os.path.basename(file_to_add_path)}~\n")
-    print(f"{result.stdout}")
-
-    exit(0)
-
 # Checking arguments
-if file_to_add_path == "" and subtract == "" and add == "":
+if file_to_add_path == "" and folder_to_add_path == "" and subtract == "" and add == "":
     error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract, subtract = '{subtract}', nothing to do, exiting.")
     exit(1)
 if add != "" and subtract != "":
@@ -88,6 +60,40 @@ if add != "" and subtract != "":
 if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
     error_message(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
     exit(1)
+
+# Folder code redirection
+if folder_to_add_path != "":
+    try:
+        # Get the current working directory
+        current_directory = os.getcwd()
+
+        # Define the arguments to pass to the script
+        python_convert_path = os.path.join(current_python_file_directory, "ssb_binary_model_adder_folder.py")
+        arguments = ["-file", file_path, "-file_to_add", file_to_add_path, "-folder_to_add", folder_to_add_path, "-add", add, "-subtract", subtract, "-offset", hex_location, "-first_pointer", first_pointer, "-first_pointer_file_to_add", first_pointer_fta, "-palette_costume", args.palette_costume, "-original_character_offset", args.original_character_offset, "-original_character_file_size", args.original_character_file_size, "-python", python_version, "-output", output_path]
+        if debug:
+            arguments.append("-debug")
+        if not convert:
+            arguments.append("-no_convert")
+        if overwrite:
+            arguments.append("-overwrite")
+        # command = [python_version, python_convert_path]
+        command = [python_version, python_convert_path] + arguments
+        # Converting file_to_add
+        result = subprocess.run(command, capture_output=True, text=True)
+        
+        if debug:
+            print(f"command = {command}")
+
+        # Printing output
+        print(f"~Output {os.path.basename(file_to_add_path)}~\n")
+        print(f"{result.stdout}")
+    except subprocess.CalledProcessError as e:
+        error_message(e.stderr)
+        exit(1)
+    except Exception as e:
+        error_message(e)
+        exit(1)
+    exit(0)
 
 # Duplicating file
 try:
@@ -222,6 +228,56 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
     except binascii.Error as e:
         error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
 
+# Finds first pointer based on op commands in a f3dex model file
+def find_first_pointer(file_path=file_path):
+    """
+    Finds first pointer location in f3dex model file by looking for op commands. (Finds pointers based on op commands)
+
+    Args:
+        file_path (string): Source file.
+
+    Returns:
+        int: Location of first pointer; returns -1 if nothing found.
+    """
+    # Setting variables
+    reading_loc = "0x00"
+    file_size = int(os.path.getsize(file_path))
+    reading_loc_hex = hex(int(reading_loc, 16))
+    data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+    commands_found = False    # used to look for 01 command
+
+    # Determining index values
+    while 1:
+        # Setting decimal value to make sure we don't read over file size
+        reading_loc_dec = int(reading_loc_hex,16)
+
+        # Checking for 01 command when certain regex have been seen
+        if commands_found:
+            # Checking for 01 command
+            if (str(data[:2]).upper() == "01"):
+                return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the 01 command
+        # FD5 = texture
+        if (texture_regex.match(str(data[:8]).upper())):
+            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
+        # FD1 = palette
+        elif (palette_regex.match(str(data[:8]).upper())):
+            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
+        # Look for 01 commands if we see these regex; FA = primitive coloring; E8 = tile; E7 = RDP sync
+        elif primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper()) or rdp_sync_regex.match(str(data[:8]).upper()):
+            commands_found = True
+        
+        # If everything else fails (no index found), then we go through and see if
+        # there's an 01 command after an E7 command for our first pointer
+        if reading_loc_dec >= file_size:
+            error_message("Couldn't find first pointer, exiting.")
+            return -1
+
+        # Reading next 8 bytes
+        reading_loc = hex(int(reading_loc, 16) + 8)
+        reading_loc_hex = hex(int(reading_loc,16))
+        data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+    return -1
+
 # Returns last pointer based on last DF command in file_path
 def find_last_pointer(file_path=file_path):
     """
@@ -289,12 +345,12 @@ def find_first_pointer_original_character(file_path=file_path):
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 2)
-     # Determining index values
+    # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
         reading_loc_dec = int(reading_loc_hex,16)
         
-        # Checking for 01 command
+        # Checking for first pointer command
         if (str(data).upper() != "0000"):
             return hex(int(reading_loc_hex, 16))
         
@@ -309,54 +365,52 @@ def find_first_pointer_original_character(file_path=file_path):
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
     return -1
 
-# Finds first pointer based on op commands in a f3dex model file
-def find_first_pointer(file_path=file_path):
+
+# Returns last pointer by following first non zero byte which is presumed to be a pointer
+def find_last_pointer_original_character(file_path=file_path):
     """
-    Finds first pointer location in f3dex model file by looking for op commands. (Finds pointers based on op commands)
+    Finds last pointer location in f3dex model file based on the furthest pointer in the file.
 
     Args:
         file_path (string): Source file.
 
     Returns:
-        int: Location of first pointer; returns -1 if nothing found.
+        int: Location of last pointer; returns -1 if nothing found.
     """
     # Setting variables
-    reading_loc = "0x00"
+    pointer_found = find_first_pointer_original_character(file_path)
+
+    if pointer_found == -1:
+        error_message("Couldn't find first pointer in original character so last pointer can't be found either, exiting.")
+        return -1
+
     file_size = int(os.path.getsize(file_path))
-    reading_loc_hex = hex(int(reading_loc, 16))
-    data = read_hex_from_offset(file_path, reading_loc_hex, 8)
-    commands_found = False    # used to look for 01 command
+    reading_loc_hex = hex(int(pointer_found, 16))
+    data = read_hex_from_offset(file_path, reading_loc_hex, 2)
+    furthest_pointer = -1
 
     # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
         reading_loc_dec = int(reading_loc_hex,16)
-
-        # Checking for 01 command when certain regex have been seen
-        if commands_found:
-            # Checking for 01 command
-            if (str(data[:2]).upper() == "01"):
-                return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the 01 command
-        # FD5 = texture
-        if (texture_regex.match(str(data[:8]).upper())):
-            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD command
-        # FD1 = palette
-        elif (palette_regex.match(str(data[:8]).upper())):
-            return hex(int(reading_loc_hex, 16) + 4) # adding 4 because reading_loc_hex is at the FD1 command
-        # Look for 01 commands if we see these regex; FA = primitive coloring; E8 = tile; E7 = RDP sync
-        elif primitive_regex.match(str(data[:8]).upper()) or primitive_sync_regex.match(str(data[:8]).upper()) or rdp_sync_regex.match(str(data[:8]).upper()):
-            commands_found = True
         
-        # If everything else fails (no index found), then we go through and see if
-        # there's an 01 command after an E7 command for our first pointer
+        # If at the end of the file, exit.
         if reading_loc_dec >= file_size:
-            error_message("Couldn't find first pointer, exiting.")
+            error_message("Couldn't find last pointer in original character file, exiting.")
             return -1
+        
+        # Seeing if this is the last pointer
+        if str(data[:4]).upper() != "FFFF" and int(str(data[:4]).upper(),16) > furthest_pointer:
+            furthest_pointer = int(str(data[:4]).upper(),16)
 
-        # Reading next 8 bytes
-        reading_loc = hex(int(reading_loc, 16) + 8)
-        reading_loc_hex = hex(int(reading_loc,16))
-        data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+        # If the next pointer is FFFF, return the furthest pointer found
+        # this is how we determine the end of pointers
+        if str(data[:4]).upper() == "FFFF":
+            return hex(furthest_pointer * 4)
+
+        # Finding next pointer location
+        next_location = hex(int(str(data[:4]).upper(),16) * 4)
+        data = read_hex_from_offset(file_path, next_location, 8)
     return -1
 
 # Making sure first_pointer is set
@@ -591,7 +645,7 @@ if file_to_add_path != "":
         exit(0)
 
     # Determining last pointer based on DF command and what to update it to based on first pointer in file_to_add
-    end_pointer_loc = find_last_pointer(file_path)
+    end_pointer_loc = find_last_pointer_original_character(file_path)
     end_pointer_loc_content = read_hex_from_offset(file_path, end_pointer_loc, num_bytes)
     first_pointer_fta_test = find_first_pointer(file_to_add_path)
     first_pointer_fta_test_offset = hex(int(first_pointer_fta_test,16)+int(hex_location,16))
@@ -665,6 +719,8 @@ if file_to_add_path != "":
         # Deleting temporary file we used to modify pointers with
         if os.path.exists(file_to_add_path_temp):
             os.remove(file_to_add_path_temp)
+    except subprocess.CalledProcessError as e:
+        error_message(e.stderr)
     except Exception as e:
         error_message(e)
 
