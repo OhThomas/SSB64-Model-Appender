@@ -8,13 +8,13 @@ Converts binary model pointers from RAM usage to ROM usage, and/or can append it
 This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhThomas/smashremix/releases/tag/Latest)
 
 <a href="https://github.com/OhThomas/smashremix/releases/tag/Latest">
-    <img src="dddcowboy.png" alt="Cowboy DDD" style="width:150px; height:auto;">
+    <img src="dddcowboy.png" alt="Cowboy DDD" style="width:160px; height:auto;">
 </a>
 
 <br>
 
 <a href="https://github.com/OhThomas/smashremix/releases/tag/Latest">
-    <img src="yoshiboshi.gif" alt="Code Demonstration" style="width:300px; height:auto;">
+    <img src="yoshiboshi.webp" alt="Code Demonstration" style="width:320px; height:auto;">
 </a>
 
 ## Usage
@@ -24,6 +24,8 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | Append a ROM model: | `python ssb_binary_model_adder.py -file peppy_cowboy.bin -file_to_add peppy_cowboy_cig_ROM.bin -no_convert`|
 | Edit pointer data in a model file without appending anything (adding 0x8 to every pointer): | `python ssb_binary_model_adder.py -file jigglypuff_microphone.bin -add 0x08 -offset 0x0`|
 | Subtract (subtracting 0x8 from every pointer that points past 0x8380): | `python ssb_binary_model_adder.py -file jigglypuff_microphone.bin -subtract 0x08 -offset 0x8380`|
+| Only update the main character file: | `python ssb_binary_model_main.py -file dedede_cowboy_main.bin -req_file "1552 Dedede Cowboy Character" -add 0x08 -offset 0x0100`|
+| Update main character file simultaneously: | `python ssb_binary_model_adder.py -file dedede_cowboy.bin -main_file dedede_cowboy_main.bin -req_file "1552 Dedede Cowboy Character" -add 0x08 -offset 0x8380`|
 | Convert a model file with RAM addresses (changes pointers based on new offset 0x7370): | `python ssb_binary_model_converter.py -file peppy_cowboy_hat.bin -offset 0x7370`|
 | Append a model to a specific location (0x8380) within a file: | `python ssb_binary_model_adder.py -file peppy_cowboy.bin -file_to_add peppy_cowboy_cig.bin -offset 0x8380`|
 | Append a folder of parts to a model: | `python ssb_binary_model_adder.py -file 1557_isaac -folder_to_add folder_of_parts`|
@@ -44,6 +46,9 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | -no_convert | Prevents converting the binary file_to_add from a single pointer to a 2 pointer command.|
 | -costume | Changes FD1 (palette) command with DE000000 0EXXXXXX to make palette based on costume palette. Enter entire DE command, ex 'DE0000000E000000'.|
 | -original_character_offset | Changes pointer data to the appropriate location if parts you are adding use vertices/animations/textures/palettes/etc from the original character. Give the characters offset as a string, ex '0x802ede10'.|
+| -main_file | Updates pointers in this main file that use this character file.|
+| -req_file | Specifies which pointers to update in main character file (-main_file) based on the txt req list, ex: '0FFE Dedede Character'. Will use first txt req file with 'Character' in the name if not set.|
+| -no_main | Prevents program from asking to continue without main character file.|
 | -debug | Prints debugging messages to output.|
 | -python | Python version or location to run python commands with.|
 | -overwrite | Forces overwrite, making output go to -file.|
