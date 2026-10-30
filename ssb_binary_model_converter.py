@@ -102,8 +102,8 @@ def read_hex_from_offset(file_path, offset, num_bytes):
     Reads data from binary file.
 
     Args:
-        file_path (string): Source file.
-        offset (string): Where in the file to read the data from.
+        file_path (str): Source file.
+        offset (str): Where in the file to read the data from.
         num_bytes (int): How many bytes to read.
 
     Returns:
@@ -128,9 +128,9 @@ def write_hex_from_offset(new_file_path, offset, hex_string):
     Writes over data in binary file.
 
     Args:
-        new_file_path (string): File to write to.
-        offset (string): Where to write the data to.
-        hex_string (string): Hexadecimal data we are writing.
+        new_file_path (str): File to write to.
+        offset (str): Where to write the data to.
+        hex_string (str): Hexadecimal data we are writing.
 
     Returns:
         None
@@ -157,7 +157,7 @@ def original_data(pointer):
     original_character_file_size.
 
     Args:
-        pointer (string): Pointer we're comparing as a string, ex '0x802ede10'.
+        pointer (str): Pointer we're comparing as a string, ex '0x802ede10'.
 
     Returns:
         boolean: True if the argument is in the original character data
@@ -175,11 +175,11 @@ def convert_single_pointer_file(file_path=file_path,destination_path=destination
     Converts pointers in a file for ROM usage by turning them into 2, based on offset and amount given.
 
     Args:
-        file_path (string): Source file.
-        destination_path (string): Output that the changes go to.
-        hex_content_new_file (string): Current hexadecimal value we're at (pointer).
-        current_location (string): Where we are in file_path, aka where hex_content is.
-        hex_location_section (string): current_location / 4: if a pointer is more than this then we update it.
+        file_path (str): Source file.
+        destination_path (str): Output that the changes go to.
+        hex_content_new_file (str): Current hexadecimal value we're at (pointer).
+        current_location (str): Where we are in file_path, aka where hex_content is.
+        hex_location_section (str): current_location / 4: if a pointer is more than this then we update it.
         num_bytes (int): How many bytes we read when reading binary data.
         pointers_overwritten (int): Keeps track of how many pointers we've overwritten.
         end_pointer(int): Determines what the last pointer is to stop converting.

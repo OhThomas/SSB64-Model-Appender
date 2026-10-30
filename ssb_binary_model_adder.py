@@ -39,6 +39,8 @@ original_character_file_size = args.original_character_file_size
 num_bytes = 4
 offset_to_add = 0
 pointers_overwritten = 0
+hex_location_range = -1
+hex_location_range_section = int("0xFFFF",16)
 current_python_file_directory = os.path.dirname(os.path.realpath(__file__))
 
 # Regex expressions
@@ -203,8 +205,8 @@ def read_hex_from_offset(file_path, offset, num_bytes):
     Reads data from binary file.
 
     Args:
-        file_path (string): Source file.
-        offset (string): Where in the file to read the data from.
+        file_path (str): Source file.
+        offset (str): Where in the file to read the data from.
         num_bytes (int): How many bytes to read.
 
     Returns:
@@ -229,9 +231,9 @@ def write_hex_from_offset(new_file_path, offset, hex_string):
     Writes over data in binary file.
 
     Args:
-        new_file_path (string): File to write to.
-        offset (string): Where to write the data to.
-        hex_string (string): Hexadecimal data we are writing.
+        new_file_path (str): File to write to.
+        offset (str): Where to write the data to.
+        hex_string (str): Hexadecimal data we are writing.
 
     Returns:
         None
@@ -256,9 +258,9 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
     Appends data to binary file.
 
     Args:
-        new_file_path (string): File to write to.
-        offset (string): Where to append the data to.
-        hex_string (string): Hexadecimal data we are appending.
+        new_file_path (str): File to write to.
+        offset (str): Where to append the data to.
+        hex_string (str): Hexadecimal data we are appending.
 
     Returns:
         None
@@ -286,7 +288,7 @@ def find_first_pointer(file_path=file_path):
     Finds first pointer location in f3dex model file by looking for op commands. (Finds pointers based on op commands)
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Location of first pointer; returns -1 if nothing found.
@@ -336,7 +338,7 @@ def find_last_pointer(file_path=file_path):
     Finds last pointer location in f3dex model file based on DF command. (Finds pointers based on op commands)
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Location of last pointer; returns -1 if nothing found.
@@ -380,14 +382,13 @@ def find_last_pointer(file_path=file_path):
         reading_loc_hex = hex(int(reading_loc,16))
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
 
-
 # Finds first pointer based on first non zero data in file (used for full pointer conversion on original character file)
 def find_first_pointer_original_character(file_path=file_path):
     """
     Finds first pointer location in f3dex model file by looking for first non zero data.
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Location of first pointer; returns -1 if nothing found.
@@ -396,14 +397,14 @@ def find_first_pointer_original_character(file_path=file_path):
     reading_loc = "0x00"
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
-    data = read_hex_from_offset(file_path, reading_loc_hex, 2)
+    data = read_hex_from_offset(file_path, reading_loc_hex, 4)
     # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
         reading_loc_dec = int(reading_loc_hex,16)
         
         # Checking for first pointer command
-        if (str(data).upper() != "0000"):
+        if (str(data[:4]).upper() != "0000"):
             return hex(int(reading_loc_hex, 16))
         
         # If at the end of the file, exit.
@@ -411,10 +412,10 @@ def find_first_pointer_original_character(file_path=file_path):
             error_message("Couldn't find first pointer in original character file, exiting.")
             return -1
         
-        # Reading next 8 bytes
-        reading_loc = hex(int(reading_loc, 16) + 8)
+        # Reading next 4 bytes
+        reading_loc = hex(int(reading_loc, 16) + 4)
         reading_loc_hex = hex(int(reading_loc,16))
-        data = read_hex_from_offset(file_path, reading_loc_hex, 8)
+        data = read_hex_from_offset(file_path, reading_loc_hex, 4)
     return -1
 
 
@@ -424,7 +425,7 @@ def find_last_pointer_original_character(file_path=file_path):
     Finds last pointer location in f3dex model file based on the furthest pointer in the file.
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Location of last pointer; returns -1 if nothing found.
@@ -438,7 +439,7 @@ def find_last_pointer_original_character(file_path=file_path):
 
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(pointer_found, 16))
-    data = read_hex_from_offset(file_path, reading_loc_hex, 2)
+    data = read_hex_from_offset(file_path, reading_loc_hex, 4)
     furthest_pointer = -1
 
     # Determining index values
@@ -462,7 +463,7 @@ def find_last_pointer_original_character(file_path=file_path):
 
         # Finding next pointer location
         next_location = hex(int(str(data[:4]).upper(),16) * 4)
-        data = read_hex_from_offset(file_path, next_location, 8)
+        data = read_hex_from_offset(file_path, next_location, 4)
     return -1
 
 # Making sure first_pointer is set
@@ -482,6 +483,12 @@ if hex_location == "-1":
     hex_location = hex(file_size)
     if debug:
         print(f"Offset set to end of file at {hex_location}")
+else:
+    # Parsing offset to make sure it's not ranged
+    if "-" in hex_location:
+        hex_location_range = hex_location.split("-")[1]
+        hex_location = hex_location.split("-")[0]
+        hex_location_range_section = int(hex_location_range, 16) / 4
 
 # Setting section to see if we need to change other pointers based on where we're adding
 hex_location_section = int(hex_location, 16) / 4
@@ -497,7 +504,7 @@ def get_base_offset_ROM(file_path=file_path):
     Gets base offset pointers use in a ROM model file. (Finds pointers based on op commands) 
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Base offset of pointers.
@@ -576,20 +583,21 @@ def get_base_offset_ROM(file_path=file_path):
     return base_offset
 
 # Updating pointer data
-def update_pointer_data(file_path=file_path,destination_path=destination_path,hex_content=hex_content,current_location=current_location,hex_location_section=hex_location_section,offset_to_add=offset_to_add,num_bytes=num_bytes,pointers_overwritten=pointers_overwritten,force_offset=0):
+def update_pointer_data(file_path=file_path,destination_path=destination_path,hex_content=hex_content,current_location=current_location,hex_location_section=hex_location_section,offset_to_add=offset_to_add,num_bytes=num_bytes,pointers_overwritten=pointers_overwritten,force_offset=0,hex_location_range_section=65535):
     """
     Updates pointers in a file for ROM usage based on offset and amount given. (Finds pointers based on previous pointer location) 
 
     Args:
-        file_path (string): Source file.
-        destination_path (string): Output that the changes go to.
-        hex_content (string): Current hexadecimal value we're at (pointer).
-        current_location (string): Where we are in file_path, aka where hex_content is.
-        hex_location_section (string): current_location / 4: if a pointer is more than this then we update it.
+        file_path (str): Source file.
+        destination_path (str): Output that the changes go to.
+        hex_content (str): Current hexadecimal value we're at (pointer).
+        current_location (str): Where we are in file_path, aka where hex_content is.
+        hex_location_section (int): current_location / 4: if a pointer is more than this then we update it.
         offset_to_add (int): Decimal value that will be added to pointers.
         num_bytes (int): How many bytes we read when reading binary data.
         pointers_overwritten (int): Keeps track of how many pointers we've overwritten.
         force_offset(int): Used mainly for the file we're adding to the base file; overrules hex_location_section and always adds whatever value in offset_to_add to every pointer encountered. (also used for adding pointer difference)
+        hex_location_range_section (int): if a pointer is less than this then we update it.
 
     Returns:
         None
@@ -602,8 +610,8 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
         # Setting upper and lower bits
         hex_content_upper_offset = int(hex_content[:4], 16) # This is what points to the next pointer
         hex_content_lower_offset = int(hex_content[4:], 16) # This is what points to the data
-        new_upper_offset = 0
-        new_lower_offset = 0
+        new_upper_offset = -1
+        new_lower_offset = -1
         new_upper_offset_padded = '{:04x}'.format(int(hex_content[:4], 16))
         new_lower_offset_padded = '{:04x}'.format(int(hex_content[4:], 16))
 
@@ -613,11 +621,11 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
             exit(1)
 
         # If the offset we're adding is before the pointer locations, then we need to change them and add the offset
-        if hex_content_upper_offset >= hex_location_section:
+        if hex_content_upper_offset >= hex_location_section and hex_content_upper_offset <= hex_location_range_section:
             # print(f"Upper hexadecimal content is bigger")
             new_upper_offset = hex_content_upper_offset + offset_to_add
             new_upper_offset_padded = '{:04x}'.format(int(new_upper_offset)) # 0000 byte format
-        if hex_content_lower_offset >= hex_location_section:
+        if hex_content_lower_offset >= hex_location_section and hex_content_lower_offset <= hex_location_range_section:
             # print(f"Lower hexadecimal content is bigger")
             new_lower_offset = hex_content_lower_offset + offset_to_add
             new_lower_offset_padded = '{:04x}'.format(int(new_lower_offset)) # 0000 byte format
@@ -641,7 +649,7 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
             exit(1)
 
         # One or both of the pointers was after our insertion, so we must add the offset and update
-        if new_upper_offset != 0 or new_lower_offset != 0:
+        if new_upper_offset != -1 or new_lower_offset != -1:
             # Setting new byte
             new_byte_to_write = new_upper_offset_padded + new_lower_offset_padded
 
@@ -673,11 +681,11 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
         exit(1)
 
 # Updating base file pointers
-update_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,num_bytes,pointers_overwritten)
+update_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,num_bytes,pointers_overwritten,0,hex_location_range_section)
 
 # Updating main character file pointers
 if args.main_file != "":
-    update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten)
+    update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section)
 
 # If we're adding a file to the output
 if file_to_add_path != "":
@@ -697,7 +705,7 @@ if file_to_add_path != "":
 
             # Updating main file if we're not appending to end of character file
             if args.main_file != "" and int(hex_location,16) < os.path.getsize(file_path):
-                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten)
+                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,hex_location_range_section)
         except FileNotFoundError:
             error_message(f"Error: The file {file_to_add_path} was not found.")
         except Exception as e:
@@ -763,11 +771,11 @@ if file_to_add_path != "":
                 print(f"file_to_add: base_offset   = {fta_base_offset} pointer_difference = \t{fta_pointer_difference}")
 
             # Applying offset to pointers
-            update_pointer_data(file_to_add_path,file_to_add_path_temp,hex_content,current_location,hex_location_section,fta_base_offset_difference,num_bytes,pointers_overwritten,force_offset=fta_pointer_difference)
+            update_pointer_data(file_to_add_path,file_to_add_path_temp,hex_content,current_location,hex_location_section,fta_base_offset_difference,num_bytes,pointers_overwritten,force_offset=fta_pointer_difference,hex_location_range_section=hex_location_range_section)
             
             # Updating main file pointers if we're not appending file to end of character file
             if args.main_file != "" and int(hex_location,16) < os.path.getsize(file_path):
-                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten)
+                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section)
 
         # Replacing last pointer in file we're adding to the last pointer from the base file
         end_pointer_loc_content = end_pointer_loc_content[:4]

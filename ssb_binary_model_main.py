@@ -30,7 +30,7 @@ def find_first_character_main(file_path):
         return ""
 
 # Updating pointer data for main character file
-def update_main_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,req_file="",num_bytes=4,pointers_overwritten=0,force_offset=0):
+def update_main_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,req_file="",num_bytes=4,pointers_overwritten=0,force_offset=0,hex_location_range_section=65535):
     """
     Updates pointers in a file for ROM usage based on offset and amount given. (Finds pointers based on previous pointer location) 
 
@@ -39,12 +39,13 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         destination_path (str): Output that the changes go to.
         hex_content (str): Current hexadecimal value we're at (pointer).
         current_location (str): Where we are in file_path, aka where hex_content is.
-        hex_location_section (str): current_location / 4: if a pointer is more than this then we update it.
+        hex_location_section (int): current_location / 4: if a pointer is more than this then we update it.
         offset_to_add (int): Decimal value that will be added to pointers.
         req_file (str): File name used in main req txt list to update pointers with, ex: '1552 Dedede Cowboy Character'.
         num_bytes (int): How many bytes we read when reading binary data.
         pointers_overwritten (int): Keeps track of how many pointers we've overwritten.
         force_offset(int): Used mainly for the file we're adding to the base file; overrules hex_location_section and always adds whatever value in offset_to_add to every pointer encountered. (also used for adding pointer difference)
+        hex_location_range_section (int): if a pointer is less than this then we update it.
 
     Returns:
         None
@@ -90,8 +91,8 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         # Setting upper and lower bits
         hex_content_upper_offset = int(hex_content[:4], 16) # This is what points to the next pointer
         hex_content_lower_offset = int(hex_content[4:], 16) # This is what points to the data
-        new_upper_offset = 0
-        new_lower_offset = 0
+        new_upper_offset = -1
+        new_lower_offset = -1
         new_upper_offset_padded = '{:04x}'.format(int(hex_content[:4], 16))
         new_lower_offset_padded = '{:04x}'.format(int(hex_content[4:], 16))
 
@@ -105,7 +106,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         #     # print(f"Upper hexadecimal content is bigger")
         #     new_upper_offset = hex_content_upper_offset + offset_to_add
         #     new_upper_offset_padded = '{:04x}'.format(int(new_upper_offset)) # 0000 byte format
-        if hex_content_lower_offset >= hex_location_section:
+        if hex_content_lower_offset >= hex_location_section and hex_content_lower_offset <= hex_location_range_section:
             # print(f"Lower hexadecimal content is bigger")
             new_lower_offset = hex_content_lower_offset + offset_to_add
             new_lower_offset_padded = '{:04x}'.format(int(new_lower_offset)) # 0000 byte format
@@ -129,7 +130,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
             exit(1)
 
         # One or both of the pointers was after our insertion, so we must add the offset and update
-        if new_upper_offset != 0 or new_lower_offset != 0:
+        if new_upper_offset != -1 or new_lower_offset != -1:
             # print(f"here,  req file at {current_line}. Line = {txt_lines[current_line]} Reg file = {req_file}.")
             # Setting new byte
             new_byte_to_write = new_upper_offset_padded + new_lower_offset_padded
@@ -250,12 +251,19 @@ if __name__ == "__main__":
         
         destination_path = create_output_file(args.o)
 
+        # Parsing offset to make sure it's not ranged
+        hex_location_range_section = 65535
+        if "-" in args.offset:
+            hex_location_range = args.offset.split("-")[1]
+            args.offset = args.offset.split("-")[0]
+            hex_location_range_section = int(hex_location_range, 16) / 4
+
         # Getting 4 bytes from first pointer
         hex_content = read_hex_from_offset(args.main_file, first_pointer, 4)
         current_location = first_pointer
         hex_location_section = int(args.offset, 16) / 4
 
-        update_main_pointer_data(args.main_file,destination_path,hex_content,current_location,hex_location_section,offset_to_add,args.req_file)
+        update_main_pointer_data(args.main_file,destination_path,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,hex_location_range_section=hex_location_range_section)
 
         # Overwriting base file
         if args.overwrite:

@@ -95,11 +95,20 @@ def add_files():
                 file_to_add_path = os.path.join(folder_to_add_path,filename)
                 file_path = os.path.join(current_directory,args.o)
 
+                # Making sure we're adding a file
+                if not os.path.isfile(file_to_add_path):
+                    continue
+
                 # Checking offset
                 if args.offset == "-1":
                     file_size = int(os.path.getsize(file_path))
                     hex_location = hex(file_size)
                 else:
+                    # Parsing offset to make sure it's not ranged
+                    if "-" in args.offset:
+                        # hex_location_range = args.offset.split("-")[1]
+                        args.offset = args.offset.split("-")[0]
+                        # hex_location_range_section = int(hex_location_range, 16) / 4
                     hex_location = hex(int(args.offset,16) + last_file_sizes)
                     file_size = int(os.path.getsize(file_to_add_path))
                     last_file_sizes = last_file_sizes + file_size

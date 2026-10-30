@@ -31,6 +31,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | Append a folder of parts to a model: | `python ssb_binary_model_adder.py -file 1557_isaac -folder_to_add folder_of_parts`|
 | Change texture palette: | `python ssb_binary_model_adder.py -file 1557_isaac -folder_to_add folder_of_parts -costume DE0000000E000000`|
 | Add parts that use original character data (give the RAM offset of that character): | `python ssb_binary_model_adder.py -file 0152_boshi -folder_to_add folder_of_parts -original_character_offset 0x802ede10`|
+| Change pointer data that points within a range (can be used to help relocate data elsewhere): | `python ssb_binary_model_adder -file 1577.bin -offset 0x50D0-0x96C8 -subtract 0x50D0 -output 1577highpoly.bin`|
 
 ## Arguments
 | Argument | Description |
@@ -38,7 +39,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | -file | File we're appending to (pointers here need to be connected).|
 | -file_to_add | File we're adding.|
 | -folder_to_add | Folder to add.|
-| -offset | Hexadecimal location of where we're adding the file in the binary; every pointer pointing past this location will be changed (as a string, ex: '0xA4').|
+| -offset | Hexadecimal location of where we're adding the file in the binary; every pointer pointing past this location will be changed (as a string, ex: '0xA4'). Can be used as a range (ex: '0xA4-0xB4').|
 | -add | Adds certain amount from pointers that point past given offset. (as a string, ex: '0x8A')|
 | -subtract | Subtracts certain amount from pointers that point past given offset. (as a string, ex: '0x8A')|
 | -first_pointer | First pointer to start checking (usually following the first FD command) (as a string, ex: '0xA4').|

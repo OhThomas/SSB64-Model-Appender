@@ -16,8 +16,8 @@ def read_hex_from_offset(file_path, offset, num_bytes):
     Reads data from binary file.
 
     Args:
-        file_path (string): Source file.
-        offset (string): Where in the file to read the data from.
+        file_path (str): Source file.
+        offset (str): Where in the file to read the data from.
         num_bytes (int): How many bytes to read.
 
     Returns:
@@ -42,9 +42,9 @@ def write_hex_from_offset(new_file_path, offset, hex_string):
     Writes over data in binary file.
 
     Args:
-        new_file_path (string): File to write to.
-        offset (string): Where to write the data to.
-        hex_string (string): Hexadecimal data we are writing.
+        new_file_path (str): File to write to.
+        offset (str): Where to write the data to.
+        hex_string (str): Hexadecimal data we are writing.
 
     Returns:
         None
@@ -69,9 +69,9 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
     Appends data to binary file.
 
     Args:
-        new_file_path (string): File to write to.
-        offset (string): Where to append the data to.
-        hex_string (string): Hexadecimal data we are appending.
+        new_file_path (str): File to write to.
+        offset (str): Where to append the data to.
+        hex_string (str): Hexadecimal data we are appending.
 
     Returns:
         None
@@ -99,7 +99,7 @@ def find_first_pointer_original_character(file_path):
     Finds first pointer location in f3dex model file by looking for first non zero data.
 
     Args:
-        file_path (string): Source file.
+        file_path (str): Source file.
 
     Returns:
         int: Location of first pointer; returns -1 if nothing found.
