@@ -24,6 +24,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | Append a ROM model: | `python ssb_binary_model_adder.py -file peppy_cowboy.bin -file_to_add peppy_cowboy_cig_ROM.bin -no_convert`|
 | Edit pointer data in a model file without appending anything (adding 0x8 to every pointer): | `python ssb_binary_model_adder.py -file jigglypuff_microphone.bin -add 0x08 -offset 0x0`|
 | Subtract (subtracting 0x8 from every pointer that points past 0x8380): | `python ssb_binary_model_adder.py -file jigglypuff_microphone.bin -subtract 0x08 -offset 0x8380`|
+| Delete data (updates pointers accordingly): | `python ssb_binary_model_adder.py -file jigglypuff_microphone.bin -delete 0x00-0x5000`|
 | Only update the main character file: | `python ssb_binary_model_main.py -file dedede_cowboy_main.bin -req_file "1552 Dedede Cowboy Character" -add 0x08 -offset 0x0100`|
 | Update main character file simultaneously: | `python ssb_binary_model_adder.py -file dedede_cowboy.bin -main_file dedede_cowboy_main.bin -req_file "1552 Dedede Cowboy Character" -add 0x08 -offset 0x8380`|
 | Convert a model file with RAM addresses (changes pointers based on new offset 0x7370): | `python ssb_binary_model_converter.py -file peppy_cowboy_hat.bin -offset 0x7370`|
@@ -42,6 +43,7 @@ This was used to help create [San Antonio Remix v2.0.1](https://github.com/OhTho
 | -offset | Hexadecimal location of where we're adding the file in the binary; every pointer pointing past this location will be changed (as a string, ex: '0xA4'). Can be used as a range (ex: '0xA4-0xB4').|
 | -add | Adds certain amount from pointers that point past given offset. (as a string, ex: '0x8A')|
 | -subtract | Subtracts certain amount from pointers that point past given offset. (as a string, ex: '0x8A')|
+| -delete | Deletes data from hexadecimal range while updating pointers, (ex: '0x2000-0x4000')|
 | -first_pointer | First pointer to start checking (usually following the first FD command) (as a string, ex: '0xA4').|
 | -first_pointer_file_to_add | First pointer in the file we're adding, if -2 then we don't change any pointers (usually following the first FD command) (as a string, ex: '0xA4').|
 | -no_convert | Prevents converting the binary file_to_add from a single pointer to a 2 pointer command.|

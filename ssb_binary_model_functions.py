@@ -21,7 +21,7 @@ def read_hex_from_offset(file_path, offset, num_bytes):
         num_bytes (int): How many bytes to read.
 
     Returns:
-        string: Hexadecimal data read from binary file.
+        str: Hexadecimal data read from binary file.
     """
     try:
         with open(file_path, "rb") as f:
@@ -92,6 +92,41 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
         error_message(f"Error: Invalid hex location '{offset}' '{e}'")
     except binascii.Error as e:
         error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
+
+def remove_hex_from_range(file_path, offset, destination_path=""):
+    """
+    Removes data from binary file.
+
+    Args:
+        new_file_path (str): File to write to.
+        offset (str): Which data will be removed as hexadecimal range, ex: '0x10-0x1000'.
+
+    Returns:
+        None
+    """
+    try:
+        # Setting variables
+        if destination_path == "":
+            destination_path = file_path
+        if "-" in offset:
+            start = int(offset.split("-")[0],16)
+            end = int(offset.split("-")[1], 16)
+        else:
+            error_message(f"Offset not valid: {offset}, needs to be hexadecimal range.")
+            return
+
+        # Reading range in file
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        modified_data = data[:start] + data[end:]
+
+        # Writing range to output file
+        with open(destination_path, 'wb') as f:
+            f.write(modified_data)
+    except FileNotFoundError:
+        error_message(f"Error: File not found at {file_path}")
+    except Exception as e:
+        error_message(e)
 
 # Finds first pointer based on first non zero data in file (used for full pointer conversion on original character file)
 def find_first_pointer_original_character(file_path):

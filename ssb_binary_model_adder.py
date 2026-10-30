@@ -6,6 +6,7 @@
 #       right now adding data with offset doesn't work properly when done multiple times.
 #   *   fix formatting of this file
 #   *   -keep_main should be an argument for a method call, not the program
+#   *   repurpose find_last_pointer_original_character
 
 # Copyright (C) 2025 Thomas Rader
 
@@ -19,6 +20,7 @@ from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
 from ssb_binary_model_main import update_main_pointer_data
 from ssb_binary_model_adder_folder import add_files
+from ssb_binary_model_functions import remove_hex_from_range
 
 file_path = args.file
 file_to_add_path = args.file_to_add
@@ -98,8 +100,8 @@ if original_character_offset != "-1" and original_character_file_size == "-1":
     args.original_character_file_size = original_character_file_size
 
 # Checking arguments
-if file_to_add_path == "" and folder_to_add_path == "" and subtract == "" and add == "":
-    error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract, subtract = '{subtract}', nothing to do, exiting.")
+if file_to_add_path == "" and folder_to_add_path == "" and subtract == "" and add == "" and args.delete == "":
+    error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract/add, subtract = '{subtract}', nothing to delete, delete = '{args.delete}', nothing to do, exiting.")
     exit(1)
 if add != "" and subtract != "":
     error_message(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
@@ -156,6 +158,8 @@ try:
 
         # Getting size of file to add so we can add it to pointer offsets
         offset_to_add = os.path.getsize(file_to_add_path)
+    elif args.delete != "":
+        offset_to_add = 4 # setting later
     else:
         if add == "":
             offset_to_add = (int(subtract, 16) * -1)
@@ -210,7 +214,7 @@ def read_hex_from_offset(file_path, offset, num_bytes):
         num_bytes (int): How many bytes to read.
 
     Returns:
-        string: Hexadecimal data read from binary file.
+        str: Hexadecimal data read from binary file.
     """
     try:
         with open(file_path, "rb") as f:
@@ -281,6 +285,33 @@ def append_hex_from_offset(new_file_path, offset, hex_string):
         error_message(f"Error: Invalid hex location '{offset}' '{e}'")
     except binascii.Error as e:
         error_message(f"Error converting hex string: {e}. Ensure the hex string has an even number of characters and contains only valid hex digits (0-9, A-F).")
+
+def overwrite_file(source_path,destination_path):
+    """
+    Overwrites destination_path file.
+
+    Args:
+        source_path (str): Source file.
+        destination_path (str): Output file.
+
+    Returns:
+        None
+    """
+    # Overwriting base file
+    if overwrite:
+        # Deleting base file
+        if os.path.exists(source_path):
+            os.remove(source_path)
+
+        # Copying temp to base
+        shutil.copy(destination_path, source_path)
+
+        # Deleting temp file
+        if os.path.exists(destination_path):
+            os.remove(destination_path)
+        print(f"Finished modifying {os.path.basename(source_path)}.")
+    else:
+        print(f"Finished modifying {os.path.basename(destination_path)}.")
 
 # Finds first pointer based on op commands in a f3dex model file
 def find_first_pointer(file_path=file_path):
@@ -383,18 +414,18 @@ def find_last_pointer(file_path=file_path):
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
 
 # Finds first pointer based on first non zero data in file (used for full pointer conversion on original character file)
-def find_first_pointer_original_character(file_path=file_path):
+def find_first_pointer_original_character(file_path=file_path,reading_loc="0x00"):
     """
     Finds first pointer location in f3dex model file by looking for first non zero data.
 
     Args:
         file_path (str): Source file.
+        reading_loc (str): Beginning location in hexadecimal, ex: '0x10'.
 
     Returns:
         int: Location of first pointer; returns -1 if nothing found.
     """
     # Setting variables
-    reading_loc = "0x00"
     file_size = int(os.path.getsize(file_path))
     reading_loc_hex = hex(int(reading_loc, 16))
     data = read_hex_from_offset(file_path, reading_loc_hex, 4)
@@ -418,14 +449,16 @@ def find_first_pointer_original_character(file_path=file_path):
         data = read_hex_from_offset(file_path, reading_loc_hex, 4)
     return -1
 
-
 # Returns last pointer by following first non zero byte which is presumed to be a pointer
-def find_last_pointer_original_character(file_path=file_path):
+def find_last_pointer_original_character(file_path=file_path,ending_loc="0xFFFFFFFF",beginning_loc="0xFFFFFFFF"):
     """
     Finds last pointer location in f3dex model file based on the furthest pointer in the file.
+    Will also return first pointer after beginning_loc or last pointer before ending_loc if either set.
 
     Args:
         file_path (str): Source file.
+        ending_loc (str): Returns last pointer before this location if wanted.
+        beginning_loc (str): Returns first pointer past this location if wanted.
 
     Returns:
         int: Location of last pointer; returns -1 if nothing found.
@@ -437,20 +470,30 @@ def find_last_pointer_original_character(file_path=file_path):
         error_message("Couldn't find first pointer in original character so last pointer can't be found either, exiting.")
         return -1
 
+    ending_loc = int(ending_loc, 16)
+    beginning_loc = int(beginning_loc, 16)
     file_size = int(os.path.getsize(file_path))
-    reading_loc_hex = hex(int(pointer_found, 16))
-    data = read_hex_from_offset(file_path, reading_loc_hex, 4)
-    furthest_pointer = -1
+    next_location = hex(int(pointer_found, 16))
+    data = read_hex_from_offset(file_path, next_location, 4)
+    furthest_pointer = 0
 
     # Determining index values
     while 1:
         # Setting decimal value to make sure we don't read over file size
-        reading_loc_dec = int(reading_loc_hex,16)
+        reading_loc_dec = int(next_location,16)
         
         # If at the end of the file, exit.
         if reading_loc_dec >= file_size:
             error_message("Couldn't find last pointer in original character file, exiting.")
             return -1
+
+        # If next pointer is past our end location, return this pointer
+        if int(data[:4].upper(),16)*4 >= ending_loc:
+            return hex(furthest_pointer * 4)
+        
+        # If current position is past our beginning_loc, return this pointer
+        if reading_loc_dec >= beginning_loc:
+            return hex(furthest_pointer * 4)
         
         # Seeing if this is the last pointer
         if str(data[:4]).upper() != "FFFF" and int(str(data[:4]).upper(),16) > furthest_pointer:
@@ -680,6 +723,55 @@ def update_pointer_data(file_path=file_path,destination_path=destination_path,he
         error_message("Error, couldn't find pointer.")
         exit(1)
 
+# Setting up if we're deleting data
+if args.delete:
+    try:
+        # Seperating our delete range
+        beginning_range = args.delete.split("-")[0]
+        ending_range = args.delete.split("-")[1]
+
+        # Subtracting difference from all pointers pointing past ending_range
+        offset_to_add = ((int(ending_range,16) - int(beginning_range,16)) * -1) / 4
+        hex_location_section = int(ending_range,16) / 4
+
+        # Printing ranges debug
+        if debug:
+            print(f"beginning_range = {beginning_range} ending_range = {ending_range} offset_to_add = {offset_to_add} hex_location_section = {hex_location_section}")
+
+        # Finding first pointer after ending_range to set our last pointer before beginning_range to
+        hanging_pointers = find_last_pointer_original_character(destination_path,beginning_loc=ending_range)
+        hanging_pointers_data = read_hex_from_offset(destination_path,hanging_pointers,4)
+
+        # Finding last pointer before beginning_range to set to our hanging pointers
+        hanging_pointer = find_last_pointer_original_character(destination_path,beginning_range)
+        new_pointer_location = hex(int(hanging_pointers,16) - (int(ending_range,16) - int(beginning_range,16)))
+
+        # Updating pointer data
+        update_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,num_bytes,pointers_overwritten)
+        
+        # Updating main character file pointers
+        if args.main_file != "":
+            update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten)
+
+        # Printing pointer debug data
+        if debug:
+            print(f"hanging_pointers = {hanging_pointers} hanging_pointers_data = {hanging_pointers_data}\nhanging_pointer = {hanging_pointer} new_pointer_location = {"0x"+'{:04x}'.format(int(new_pointer_location,16))}")
+
+        # Redirecting hanging pointer
+        write_hex_from_offset(destination_path,hanging_pointer,'{:04x}'.format(int(int(new_pointer_location,16) / 4)))
+
+        # Removing hexadecimal data
+        remove_hex_from_range(destination_path,args.delete)
+
+        # Overwriting if set
+        overwrite_file(source_path,destination_path)
+
+        # Done deleting data
+        exit(0)
+    except Exception as e:
+        error_message(e)
+        exit(1)
+
 # Updating base file pointers
 update_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,num_bytes,pointers_overwritten,0,hex_location_range_section)
 
@@ -796,18 +888,5 @@ if file_to_add_path != "":
     except Exception as e:
         error_message(e)
 
-# Overwriting base file
-if overwrite:
-    # Deleting base file
-    if os.path.exists(source_path):
-        os.remove(source_path)
-
-    # Copying temp to base
-    shutil.copy(destination_path, source_path)
-
-    # Deleting temp file
-    if os.path.exists(destination_path):
-        os.remove(destination_path)
-    print(f"Finished modifying {os.path.basename(source_path)}.")
-else:
-    print(f"Finished modifying {os.path.basename(destination_path)}.")
+# Overwriting if set
+overwrite_file(source_path,destination_path)

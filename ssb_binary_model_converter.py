@@ -107,7 +107,7 @@ def read_hex_from_offset(file_path, offset, num_bytes):
         num_bytes (int): How many bytes to read.
 
     Returns:
-        string: Hexadecimal data read from binary file.
+        str: Hexadecimal data read from binary file.
     """
     try:
         with open(file_path, "rb") as f:
