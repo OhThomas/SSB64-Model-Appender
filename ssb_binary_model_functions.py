@@ -4,6 +4,8 @@
 
 import os
 import binascii
+import datetime
+import shutil
 from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
 
@@ -163,3 +165,20 @@ def find_first_pointer_original_character(file_path):
         reading_loc_hex = hex(int(reading_loc,16))
         data = read_hex_from_offset(file_path, reading_loc_hex, 8)
     return -1
+
+def backup_main_file(main_file,no_main_backup):
+    """
+    Backs up main file with datetime timestamp.
+
+    Args:
+        main_file (str): Main file.
+        no_main_backup (bool): Argument to decide if we backup main or not.
+
+    Returns:
+        None
+    """
+    # Backing up main file
+    if main_file != "" and not no_main_backup:
+        backup_file = os.path.splitext(main_file)[0]+datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")+".bak"
+        if not os.path.isfile(backup_file):
+            shutil.copy(main_file,backup_file)

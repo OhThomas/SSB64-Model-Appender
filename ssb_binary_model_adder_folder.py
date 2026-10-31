@@ -9,7 +9,7 @@ import os
 import subprocess
 from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
-from ssb_binary_model_functions import read_hex_from_offset
+from ssb_binary_model_functions import read_hex_from_offset, backup_main_file
 
 def error_message(e,cf=currentframe()):
     print(f'File "{os.path.basename(getframeinfo(cf).filename)}", line {cf.f_lineno}, An error occurred: \n{e}\n')
@@ -79,6 +79,9 @@ def add_files():
         if args.debug:
             print(f"File '{os.path.basename(args.file)}' copied and renamed to '{os.path.basename(args.o)}' successfully.")
 
+        # Backing up main
+        backup_main_file(args.main_file,args.no_main_backup)
+
         # Construct full paths for source and destination
         folder_to_add_path = os.path.join(current_directory, args.folder_to_add)
         folder_directory = os.fsencode(folder_to_add_path)
@@ -134,8 +137,8 @@ def add_files():
                     arguments.append("-no_convert")
                 if args.no_main:
                     arguments.append("-no_main")
-                if not args.overwrite:
-                    arguments.append("-keep_main")
+                # Forcing no main backup
+                arguments.append("-no_main_backup")
                 # Forcing overwrite
                 arguments.append("-overwrite")
 

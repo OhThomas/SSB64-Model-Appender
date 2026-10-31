@@ -5,7 +5,6 @@
 #   *   inject pointers properly with last pointer in new data pointing to next possible pointer (or FFFF)
 #       right now adding data with offset doesn't work properly when done multiple times.
 #   *   fix formatting of this file
-#   *   -keep_main should be an argument for a method call, not the program
 #   *   repurpose find_last_pointer_original_character
 
 # Copyright (C) 2025 Thomas Rader
@@ -20,7 +19,7 @@ from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
 from ssb_binary_model_main import update_main_pointer_data
 from ssb_binary_model_adder_folder import add_files
-from ssb_binary_model_functions import remove_hex_from_range
+from ssb_binary_model_functions import remove_hex_from_range, backup_main_file
 
 file_path = args.file
 file_to_add_path = args.file_to_add
@@ -30,6 +29,7 @@ subtract = args.subtract
 hex_location = args.offset
 first_pointer = args.first_pointer
 first_pointer_fta = args.first_pointer_file_to_add
+first_pointer_main = -1 # Create argument
 convert = not args.no_convert
 debug = args.debug
 palette_costume = args.palette_costume
@@ -93,115 +93,6 @@ def search_for_main(file_path):
                         main_candidates.append(os.path.join(dir_path, files))
 
     return main_candidates
-
-# Checking if original_character_file_size is set
-if original_character_offset != "-1" and original_character_file_size == "-1":
-    original_character_file_size = str(os.path.getsize(file_path))
-    args.original_character_file_size = original_character_file_size
-
-# Checking arguments
-if file_to_add_path == "" and folder_to_add_path == "" and subtract == "" and add == "" and args.delete == "":
-    error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract/add, subtract = '{subtract}', nothing to delete, delete = '{args.delete}', nothing to do, exiting.")
-    exit(1)
-if add != "" and subtract != "":
-    error_message(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
-    exit(1)
-if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
-    error_message(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
-    exit(1)
-if not args.no_main and args.main_file == "":
-    main_candidates = search_for_main(file_path)
-    response = "N"
-    print("-no_main isn't set and no -main_file given, if updating a character file it's important to update main pointers too.")
-    if main_candidates:
-        print("Here are some possible candidates to use for the main file:")
-        main_num = 0
-        for main_files in main_candidates:
-            print(f"{main_num}: {main_files}")
-            main_num = main_num + 1
-        print("Enter the leftmost number to use the corresponding file or\nEnter Y to continue without main or\nEnter C to cancel.")
-        response = input()
-        if response.isdigit():
-            if int(response) >= len(main_candidates) or int(response) < 0:
-                error_message(f"Response ({response}) isn't valid, please try again.")
-                exit(1)
-            else:
-                args.main_file = main_candidates[int(response)]
-        elif response.upper() != "Y":
-            exit(0)
-    else:
-        print("Would you like to continue without a main character file? Enter Y/N")
-        response = input()
-        if response.upper() != "Y":
-            exit(0)
-if args.main_file != "":
-    if not os.path.exists(args.main_file):
-        error_message(f"Main file not found {args.main_file}.")
-        exit(1)
-
-# Folder code redirection
-if folder_to_add_path != "":
-    add_files()
-    exit(0)
-
-# Duplicating file
-try:
-    # Get the current working directory
-    current_directory = os.getcwd()
-
-    # Construct full paths for source and destination
-    source_path = os.path.join(current_directory, file_path)
-    destination_path = os.path.join(current_directory, output_path)
-    if file_to_add_path != "":
-        file_to_add_path = os.path.join(current_directory, file_to_add_path)
-        file_to_add_path_temp = os.path.join(current_directory, file_to_add_path+"_temp")
-
-        # Getting size of file to add so we can add it to pointer offsets
-        offset_to_add = os.path.getsize(file_to_add_path)
-    elif args.delete != "":
-        offset_to_add = 4 # setting later
-    else:
-        if add == "":
-            offset_to_add = (int(subtract, 16) * -1)
-        else:
-            offset_to_add = int(add, 16)
-
-    # Setting temp output if we're overwriting
-    if file_path == output_path and overwrite == True:
-        output_path = output_path+"temp"
-        destination_path = os.path.join(current_directory, output_path)
-
-    if file_path == output_path:
-        error_message(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
-        exit(1)
-
-    # Deleting output file 
-    if os.path.exists(destination_path):
-        os.remove(destination_path)
-
-    # Copy the file
-    shutil.copy(source_path, destination_path)
-    if debug:
-        print(f"File '{os.path.basename(file_path)}' copied and renamed to '{os.path.basename(output_path)}' successfully.")
-
-    # Setting main file output
-    if args.main_file != "":
-        if overwrite and not args.keep_main:
-            main_outfile = args.main_file
-        else:
-            main_outfile = os.path.splitext(args.main_file)[0] + ".temp.bin"
-except FileNotFoundError as e:
-    error_message(f"{e}")
-    exit(1)
-except Exception as e:
-    error_message(e)
-    exit(1)
-
-if offset_to_add < 4 and offset_to_add > -4:
-    error_message(f"File size of '{file_to_add_path}' or add size '{add}' or subtract size '{subtract}' not adequate, has to at least be 4.")
-    exit(1)
-else:
-    offset_to_add = int(offset_to_add / 4)
 
 # Reads hexadecimal data from a file with hex offset given
 def read_hex_from_offset(file_path, offset, num_bytes):
@@ -509,6 +400,114 @@ def find_last_pointer_original_character(file_path=file_path,ending_loc="0xFFFFF
         data = read_hex_from_offset(file_path, next_location, 4)
     return -1
 
+# Checking if original_character_file_size is set
+if original_character_offset != "-1" and original_character_file_size == "-1":
+    original_character_file_size = str(os.path.getsize(file_path))
+    args.original_character_file_size = original_character_file_size
+
+# Checking arguments
+if file_to_add_path == "" and folder_to_add_path == "" and subtract == "" and add == "" and args.delete == "":
+    error_message(f"Error file_to_add is '{file_to_add_path}' and there's nothing to subtract/add, subtract = '{subtract}', nothing to delete, delete = '{args.delete}', nothing to do, exiting.")
+    exit(1)
+if add != "" and subtract != "":
+    error_message(f"Error, both subtract and add are set, subtract is '{subtract}' and add is '{add}'. You need to choose to either subtract or add, exiting.")
+    exit(1)
+if palette_costume != "" and not (costume_regex.match(str(palette_costume).upper())):
+    error_message(f"Error, palette_costume doesn't match DE000000 0EXXXXXX, exiting.")
+    exit(1)
+if not args.no_main and args.main_file == "":
+    main_candidates = search_for_main(file_path)
+    response = "N"
+    print("-no_main isn't set and no -main_file given, if updating a character file it's important to update main pointers too.")
+    if main_candidates:
+        print("Here are some possible candidates to use for the main file:")
+        main_num = 0
+        for main_files in main_candidates:
+            print(f"{main_num}: {main_files}")
+            main_num = main_num + 1
+        print("Enter the leftmost number to use the corresponding file or\nEnter Y to continue without main or\nEnter C to cancel.")
+        response = input()
+        if response.isdigit():
+            if int(response) >= len(main_candidates) or int(response) < 0:
+                error_message(f"Response ({response}) isn't valid, please try again.")
+                exit(1)
+            else:
+                args.main_file = main_candidates[int(response)]
+        elif response.upper() != "Y":
+            exit(0)
+    else:
+        print("Would you like to continue without a main character file? Enter Y/N")
+        response = input()
+        if response.upper() != "Y":
+            exit(0)
+if args.main_file != "":
+    if not os.path.exists(args.main_file):
+        error_message(f"Main file not found {args.main_file}.")
+        exit(1)
+    # Setting first main pointer
+    if first_pointer_main == -1:
+        first_pointer_main = find_first_pointer_original_character(args.main_file)
+
+# Folder code redirection
+if folder_to_add_path != "":
+    add_files()
+    exit(0)
+
+# Duplicating file
+try:
+    # Get the current working directory
+    current_directory = os.getcwd()
+
+    # Construct full paths for source and destination
+    source_path = os.path.join(current_directory, file_path)
+    destination_path = os.path.join(current_directory, output_path)
+    if file_to_add_path != "":
+        file_to_add_path = os.path.join(current_directory, file_to_add_path)
+        file_to_add_path_temp = os.path.join(current_directory, file_to_add_path+"_temp")
+
+        # Getting size of file to add so we can add it to pointer offsets
+        offset_to_add = os.path.getsize(file_to_add_path)
+    elif args.delete != "":
+        offset_to_add = 4 # setting later
+    else:
+        if add == "":
+            offset_to_add = (int(subtract, 16) * -1)
+        else:
+            offset_to_add = int(add, 16)
+
+    # Setting temp output if we're overwriting
+    if file_path == output_path and overwrite == True:
+        output_path = output_path+"temp"
+        destination_path = os.path.join(current_directory, output_path)
+
+    if file_path == output_path:
+        error_message(f"Error: The file '{file_path}' is the same as the output '{output_path}'.")
+        exit(1)
+
+    # Deleting output file 
+    if os.path.exists(destination_path):
+        os.remove(destination_path)
+
+    # Copy the file
+    shutil.copy(source_path, destination_path)
+    if debug:
+        print(f"File '{os.path.basename(file_path)}' copied and renamed to '{os.path.basename(output_path)}' successfully.")
+
+    # Backing up main file
+    backup_main_file(args.main_file,args.no_main_backup)
+except FileNotFoundError as e:
+    error_message(f"{e}")
+    exit(1)
+except Exception as e:
+    error_message(e)
+    exit(1)
+
+if offset_to_add < 4 and offset_to_add > -4:
+    error_message(f"File size of '{file_to_add_path}' or add size '{add}' or subtract size '{subtract}' not adequate, has to at least be 4.")
+    exit(1)
+else:
+    offset_to_add = int(offset_to_add / 4)
+
 # Making sure first_pointer is set
 if first_pointer == "-1":
     first_pointer = find_first_pointer_original_character(file_path)
@@ -751,7 +750,7 @@ if args.delete:
         
         # Updating main character file pointers
         if args.main_file != "":
-            update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten)
+            update_main_pointer_data(args.main_file,args.main_file,first_pointer_main,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten,overwrite=True)
 
         # Printing pointer debug data
         if debug:
@@ -777,7 +776,7 @@ update_pointer_data(file_path,destination_path,hex_content,current_location,hex_
 
 # Updating main character file pointers
 if args.main_file != "":
-    update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section)
+    update_main_pointer_data(args.main_file,args.main_file,first_pointer_main,hex_location_section,offset_to_add,args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section,overwrite=True)
 
 # If we're adding a file to the output
 if file_to_add_path != "":
@@ -797,7 +796,7 @@ if file_to_add_path != "":
 
             # Updating main file if we're not appending to end of character file
             if args.main_file != "" and int(hex_location,16) < os.path.getsize(file_path):
-                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,hex_location_range_section)
+                update_main_pointer_data(args.main_file,args.main_file,first_pointer_main,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,hex_location_range_section,overwrite=True)
         except FileNotFoundError:
             error_message(f"Error: The file {file_to_add_path} was not found.")
         except Exception as e:
@@ -867,7 +866,7 @@ if file_to_add_path != "":
             
             # Updating main file pointers if we're not appending file to end of character file
             if args.main_file != "" and int(hex_location,16) < os.path.getsize(file_path):
-                update_main_pointer_data(args.main_file,main_outfile,hex_content,current_location,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section)
+                update_main_pointer_data(args.main_file,args.main_file,first_pointer_main,hex_location_section,os.path.getsize(file_to_add_path),args.req_file,num_bytes,pointers_overwritten,0,hex_location_range_section,overwrite=True)
 
         # Replacing last pointer in file we're adding to the last pointer from the base file
         end_pointer_loc_content = end_pointer_loc_content[:4]

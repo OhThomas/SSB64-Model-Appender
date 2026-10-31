@@ -5,6 +5,7 @@
 import shutil
 import os
 import re
+import datetime
 from inspect import currentframe, getframeinfo
 from ssb_binary_model_adder_arguments import args
 from ssb_binary_model_functions import find_first_pointer_original_character, read_hex_from_offset, write_hex_from_offset, append_hex_from_offset
@@ -30,14 +31,13 @@ def find_first_character_main(file_path):
         return ""
 
 # Updating pointer data for main character file
-def update_main_pointer_data(file_path,destination_path,hex_content,current_location,hex_location_section,offset_to_add,req_file="",num_bytes=4,pointers_overwritten=0,force_offset=0,hex_location_range_section=65535):
+def update_main_pointer_data(file_path,destination_path,current_location,hex_location_section,offset_to_add,req_file="",num_bytes=4,pointers_overwritten=0,force_offset=0,hex_location_range_section=65535,overwrite=False):
     """
     Updates pointers in a file for ROM usage based on offset and amount given. (Finds pointers based on previous pointer location) 
 
     Args:
         file_path (str): Source file.
         destination_path (str): Output that the changes go to.
-        hex_content (str): Current hexadecimal value we're at (pointer).
         current_location (str): Where we are in file_path, aka where hex_content is.
         hex_location_section (int): current_location / 4: if a pointer is more than this then we update it.
         offset_to_add (int): Decimal value that will be added to pointers.
@@ -46,6 +46,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         pointers_overwritten (int): Keeps track of how many pointers we've overwritten.
         force_offset(int): Used mainly for the file we're adding to the base file; overrules hex_location_section and always adds whatever value in offset_to_add to every pointer encountered. (also used for adding pointer difference)
         hex_location_range_section (int): if a pointer is less than this then we update it.
+        overwrite (bool): Overwrites main file if set.
 
     Returns:
         None
@@ -56,6 +57,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         exit(1)
 
     # Setting variables
+    hex_content = read_hex_from_offset(file_path, current_location, num_bytes)
     txt_file_path = os.path.splitext(file_path)[0] + ".txt"
     if not os.path.isfile(txt_file_path):
         error_message(f"Text file not found {txt_file_path}.")
@@ -68,7 +70,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
     current_line = 0
 
     # Checking if destination path exists
-    destination_path = create_output_file(destination_path)
+    destination_path = create_output_file(destination_path,overwrite)
 
     # Checking if destination txt file exists, copy source txt if not
     txt_file_destination = os.path.splitext(destination_path)[0] + ".txt"
@@ -175,7 +177,7 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         exit(1)
 
     # Overwriting base file
-    if args.overwrite and not args.keep_main and destination_path != args.main_file:
+    if args.overwrite and destination_path != args.main_file:
         # Deleting base file
         if os.path.exists(args.main_file):
             os.remove(args.main_file)
@@ -191,13 +193,14 @@ def update_main_pointer_data(file_path,destination_path,hex_content,current_loca
         print(f"Finished modifying {os.path.basename(destination_path)}.")
     return None
 
-def create_output_file(destination_path):
+def create_output_file(destination_path,overwrite):
     """
     Creates main character output file. 
     Will create a duplicate if overwriting that will replace the main file later in the program.
     
     Args:
         destination_path (str): Main character file.
+        overwrite (bool): Overwrites main file if set.
 
     Returns:
         None
@@ -206,11 +209,9 @@ def create_output_file(destination_path):
         return destination_path
 
     # Setting temp output if we're overwriting
-    if args.main_file == args.o and args.overwrite == True:
-        destination_path = args.o+"temp"#os.path.join(current_directory, output_path)
-
-    # Checking if our output is proper (we overwrite later so source and output need to be diff here)
-    if args.main_file == destination_path and not args.overwrite and args.keep_main:
+    if args.main_file == args.o and overwrite == True:
+        destination_path = args.o+datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")#os.path.join(current_directory, output_path)
+    elif args.main_file == destination_path and not overwrite:
         error_message(f"Error: The file '{args.main_file}' is the same as the output '{destination_path}'; current argument output = '{args.o}'.")
         exit(1)
 
@@ -249,7 +250,7 @@ if __name__ == "__main__":
             error_message(f"Offset not set, {args.offset}.")
             exit(1)
         
-        destination_path = create_output_file(args.o)
+        destination_path = create_output_file(args.o,args.overwrite)
 
         # Parsing offset to make sure it's not ranged
         hex_location_range_section = 65535
@@ -263,7 +264,7 @@ if __name__ == "__main__":
         current_location = first_pointer
         hex_location_section = int(args.offset, 16) / 4
 
-        update_main_pointer_data(args.main_file,destination_path,hex_content,current_location,hex_location_section,offset_to_add,args.req_file,hex_location_range_section=hex_location_range_section)
+        update_main_pointer_data(args.main_file,destination_path,current_location,hex_location_section,offset_to_add,args.req_file,hex_location_range_section=hex_location_range_section,overwrite=args.overwrite)
 
         # Overwriting base file
         if args.overwrite:

@@ -21,7 +21,7 @@ parser.add_argument("-original_character_file_size","--original_character_file_s
 parser.add_argument("-main_file","--main_file",default="",type=str,help="Main file of the character (txt req list should be the same name).")
 parser.add_argument("-req_file","--req_file",default="",type=str,help="Req file name (name of file in the main txt to identify with) to update pointers in main that are using this file, ex: '0FFE Dedede Character' (if not set it will default to first string in main txt file with 'Character' in it). Only used if -main_file set.")
 parser.add_argument("-no_main","--no_main",action="store_true",help="Prevents program asking if you want to continue without main.")
-parser.add_argument("-keep_main","--keep_main",action="store_true",help="Program sets this to not overwrite main when adding multiple files.")
+parser.add_argument("-no_main_backup","--no_main_backup",action="store_true",help="Prevent backing up the main file.")
 parser.add_argument("-debug","--debug",action="store_true",help="Prints debugging messages to output.")
 parser.add_argument("-python","--python","-python_version","--python_version",default="python3",type=str,help="Python version or location to run python commands with.")
 parser.add_argument("-overwrite","--overwrite","-force","--force",action="store_true",help="Forces overwrite, making output go to -file.")
